@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const app=express();app.disable('x-powered-by');app.set('trust proxy',1);
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:5,ssl:process.env.DB_SSL==='true'?{rejectUnauthorized:true}:undefined});
-const MODULES=['首頁總覽','信眾管理','功德箱管理','關懷追蹤','活動管理','生日提醒','參與紀錄','財務管理','儀式管理','友宮管理','宮務行政','宮廟行事曆'];
+const MODULES=['首頁總覽','信眾管理','功德箱管理','關懷追蹤','活動管理','生日提醒','參與紀錄','財務管理','儀式管理','友宮管理','宮務行政','三巡府行事曆'];
 const COOKIE='sanxun_session';
 const hashToken=x=>crypto.createHash('sha256').update(x).digest('hex');
 const hashPass=(password,salt=crypto.randomBytes(16).toString('hex'))=>salt+':'+crypto.scryptSync(password,salt,64).toString('hex');
@@ -17,6 +17,7 @@ const clean=s=>String(s||'').trim();
 async function init(){
  await pool.query(`create table if not exists temple_users (id bigserial primary key, username text not null unique, display_name text not null, title text not null default '', password_hash text not null, is_admin boolean not null default false, enabled boolean not null default true, permissions jsonb not null default '[]'::jsonb, created_at timestamptz not null default now());`);
  await pool.query(`create table if not exists temple_sessions (token_hash text primary key, user_id bigint not null references temple_users(id) on delete cascade, expires_at timestamptz not null);`);
+ await pool.query("update temple_users set permissions=(permissions - '宮廟行事曆') || '[\"三巡府行事曆\"]'::jsonb where permissions ? '宮廟行事曆'");
  const first=await pool.query('select count(*)::int as n from temple_users');
  if(first.rows[0].n===0){const password=process.env.ADMIN_INITIAL_PASSWORD; if(!password||password.length<8)throw Error('首次部署請設定 ADMIN_INITIAL_PASSWORD，至少 8 碼，不可寫入 GitHub');
   await pool.query('insert into temple_users(username,display_name,title,password_hash,is_admin,permissions) values($1,$2,$3,$4,true,$5)',[clean(process.env.ADMIN_USERNAME)||'LOH0715','系統管理員','系統管理',hashPass(password),JSON.stringify(MODULES)]);
