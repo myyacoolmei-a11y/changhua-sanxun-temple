@@ -1,0 +1,25 @@
+{
+  "name": "彰化三巡府｜宮廟智慧管理系統",
+  "short_name": "彰化三巡府",
+  "description": "彰化三巡府宮廟智慧管理系統",
+  "lang": "zh-TW",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#083448",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
