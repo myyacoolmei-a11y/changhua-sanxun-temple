@@ -48,7 +48,41 @@ app.get('/health',async(req,res)=>{try{await pool.query('select 1');res.json({ok
 app.get('/api/diagnostics',async(req,res)=>{try{const q=await pool.query('select exists(select 1 from temple_users) as initialized');res.json({api:'online',database:'online',users_initialized:q.rows[0].initialized})}catch{res.status(503).json({api:'online',database:'unavailable'})}});
 app.get('/login',(_,res)=>res.sendFile(path.join(__dirname,'public','login.html')));
 app.get('/login.html',(_,res)=>res.redirect('/login'));
-app.get('/',auth,(_,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
+app.get('/', async (req, res, next) => {
+  try {
+    const match = (req.headers.cookie || '').match(
+      /(?:^|;\s*)sanxun_session=([^;]+)/
+    );
+
+    if (!match) return res.redirect('/login');
+
+    let token;
+    try {
+      token = decodeURIComponent(match[1]);
+    } catch {
+      return res.redirect('/login');
+    }
+
+    const result = await pool.query(
+      `SELECT 1 FROM temple_sessions s
+       JOIN temple_users u ON u.id = s.user_id
+       WHERE s.token_hash = $1
+       AND s.expires_at > now()
+       AND u.enabled = true`,
+      [hashToken(token)]
+    );
+
+    if (!result.rowCount) {
+      return res.redirect('/login');
+    }
+
+    return res.sendFile(
+      path.join(__dirname, 'public', 'index.html')
+    );
+  } catch (error) {
+    next(error);
+  }
+});
 app.get('/index.html',(_,res)=>res.redirect('/'));
 app.use(express.static(path.join(__dirname,'public'),{index:false}));
 app.use((err,req,res,next)=>{console.error('Request error:',err.code||err.message);res.status(500).json({error:'伺服器處理失敗，請檢查 Railway logs'})});
