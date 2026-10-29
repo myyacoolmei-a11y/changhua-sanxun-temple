@@ -29,10 +29,59 @@ function admin(req,res,next){if(!req.user.is_admin)return res.status(403).json({
 function sameOrigin(req,res,next){if(['POST','PUT','PATCH','DELETE'].includes(req.method)){const origin=req.get('origin');const host=req.get('host');if(origin){let parsed;try{parsed=new URL(origin)}catch{return res.status(403).json({error:'來源網址格式不正確'})}if(parsed.host!==host)return res.status(403).json({error:'不允許跨站操作'})}}next()}
 app.use('/api',sameOrigin);
 const attempts=new Map();
-app.post('/api/login',async(req,res,next)=>{try{const username=clean(req.body?.username),password=String(req.body?.password||'');const key=req.ip+':'+username.toLowerCase();const a=attempts.get(key);if(a?.until>Date.now()&&a.count>=6)return res.status(429).json({error:'登入嘗試過多，請稍後再試'});
- const q=await pool.query('select * from temple_users where username=$1 and enabled=true',[username]);const u=q.rows[0];if(!u||!verifyPass(password,u.password_hash)){const v=(a?.until>Date.now()?a.count:0)+1;attempts.set(key,{count:v,until:Date.now()+15*60*1000});return res.status(401).json({error:'帳號或密碼錯誤'});}attempts.delete(key);
- const token=crypto.randomBytes(32).toString('hex');await pool.query('insert into temple_sessions(token_hash,user_id,expires_at) values($1,$2,now()+interval \'7 days\')',[hashToken(token),u.id]);res.cookie(COOKIE,token,{...cookieOpts,maxAge:7*24*3600*1000});res.json({user:info(u)});
- }catch(e){next(e)}});
+app.post('/api/login', async (req, res, next) => {
+  try {
+    const username = clean(req.body?.username);
+    const password = String(req.body?.password || '');
+    const key = req.ip + ':' + username.toLowerCase();
+
+    const q = await pool.query(
+      'SELECT * FROM temple_users WHERE username=$1 AND enabled=true',
+      [username]
+    );
+
+    const u = q.rows[0];
+    const valid = u && verifyPass(password, u.password_hash);
+
+    if (!valid) {
+      const a = attempts.get(key);
+      const count = (a?.until > Date.now() ? a.count : 0) + 1;
+
+      attempts.set(key, {
+        count,
+        until: Date.now() + 15 * 60 * 1000
+      });
+
+      if (count >= 6) {
+        return res.status(429).json({
+          error: '登入嘗試過多，請稍後再試'
+        });
+      }
+
+      return res.status(401).json({
+        error: '帳號或密碼錯誤'
+      });
+    }
+
+    attempts.delete(key);
+
+    const token = crypto.randomBytes(32).toString('hex');
+
+    await pool.query(
+      "INSERT INTO temple_sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '7 days')",
+      [hashToken(token), u.id]
+    );
+
+    res.cookie(COOKIE, token, {
+      ...cookieOpts,
+      maxAge: 7 * 24 * 3600 * 1000
+    });
+
+    res.json({ user: info(u) });
+  } catch (e) {
+    next(e);
+  }
+});
 app.post('/api/logout',auth,async(req,res,next)=>{try{const m=req.headers.cookie.match(/(?:^|;\s*)sanxun_session=([^;]+)/);if(m)await pool.query('delete from temple_sessions where token_hash=$1',[hashToken(decodeURIComponent(m[1]))]);res.clearCookie(COOKIE,cookieOpts);res.json({ok:true})}catch(e){next(e)}});
 app.get('/api/me',auth,(req,res)=>res.json({user:info(req.user),modules:MODULES}));
 app.get('/api/users',auth,admin,async(req,res,next)=>{try{const q=await pool.query('select id,username,display_name,title,is_admin,enabled,permissions from temple_users order by id');res.json({users:q.rows.map(u=>({...info(u),enabled:u.enabled}))})}catch(e){next(e)}});
