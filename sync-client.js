@@ -8,7 +8,6 @@
   const status=(message,warning=false)=>{
   const el=$();
   if(!el)return;
-
   el.textContent=message;
   el.style.background=warning?'#fff0d8':'#e0f2eb';
   el.style.color=warning?'#884600':'#075d53';
