@@ -5,7 +5,19 @@
   let lastSaved='';
   let granted=[];
   const $=()=>document.getElementById('temple-sync-box');
-  const status=(message,warning=false)=>{const el=$();if(el){el.textContent=message;el.style.background=warning?'#fff0d8':'#e0f2eb';el.style.color=warning?'#884600':'#075d53';}};
+  const status=(message,warning=false)=>{
+  const el=$();
+  if(!el)return;
+
+  el.textContent=message;
+  el.style.background=warning?'#fff0d8':'#e0f2eb';
+  el.style.color=warning?'#884600':'#075d53';
+
+  // 正常時隱藏整個同步提示框，異常時顯示
+  if(el.parentElement){
+    el.parentElement.style.display=warning?'block':'none';
+  }
+};
   function localSnapshot(){return {db:structuredClone(db),rosters:structuredClone(rosters),publicSubmissions:structuredClone(publicSubmissions)}}
   function backup(){
     const data={exportedAt:new Date().toISOString(),url:location.origin,keys:{}};
