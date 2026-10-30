@@ -36,6 +36,7 @@ app.post('/api/login',async(req,res,next)=>{try{const username=clean(req.body?.u
  const token=crypto.randomBytes(32).toString('hex');await pool.query('insert into temple_sessions(token_hash,user_id,expires_at) values($1,$2,now()+interval \'7 days\')',[hashToken(token),u.id]);res.cookie(COOKIE,token,{...cookieOpts,maxAge:7*24*3600*1000});res.json({user:info(u)});
  }catch(e){next(e)}});
 app.post('/api/logout',auth,async(req,res,next)=>{try{const m=req.headers.cookie.match(/(?:^|;\s*)sanxun_session=([^;]+)/);if(m)await pool.query('delete from temple_sessions where token_hash=$1',[hashToken(decodeURIComponent(m[1]))]);res.clearCookie(COOKIE,cookieOpts);res.json({ok:true})}catch(e){next(e)}});
+installTempleSync(app,pool,auth,MODULES);
 app.get('/api/me',auth,(req,res)=>res.json({user:info(req.user),modules:MODULES}));
 app.get('/api/users',auth,admin,async(req,res,next)=>{try{const q=await pool.query('select id,username,display_name,title,is_admin,enabled,permissions from temple_users order by id');res.json({users:q.rows.map(u=>({...info(u),enabled:u.enabled}))})}catch(e){next(e)}});
 app.post('/api/users',auth,admin,async(req,res,next)=>{try{const {username,name,title,password,permissions}=req.body||{};if(!/^[A-Za-z0-9_.-]{3,40}$/.test(username||'')||!clean(name)||String(password||'').length<8||!Array.isArray(permissions))return res.status(400).json({error:'請填寫有效的帳號、姓名及至少 8 碼密碼'});const allowed=[...new Set(permissions.filter(x=>MODULES.includes(x)))];const q=await pool.query('insert into temple_users(username,display_name,title,password_hash,permissions) values($1,$2,$3,$4,$5) returning id',[username,clean(name).slice(0,80),clean(title).slice(0,80),hashPass(password),JSON.stringify(allowed)]);res.json({id:q.rows[0].id})}catch(e){if(e.code==='23505')return res.status(409).json({error:'帳號已經存在'});next(e)}});
@@ -80,4 +81,4 @@ app.get('/', async (req, res, next) => {
 app.get('/index.html',(_,res)=>res.redirect('/'));
 app.use(express.static(path.join(__dirname,'public'),{index:false}));
 app.use((err,req,res,next)=>{console.error('Request error:',err.code||err.message);res.status(500).json({error:'伺服器處理失敗，請檢查 Railway logs'})});
-init().then(()=>app.listen(process.env.PORT||3000,'0.0.0.0',()=>console.log('Temple system ready'))).catch(e=>{console.error('Startup failed:',e.message);process.exit(1)});
+init().then(()=>initTempleSync(pool)).then(()=>app.listen(process.env.PORT||3000,'0.0.0.0',()=>console.log('Temple system ready'))).catch(e=>{console.error('Startup failed:',e.message);process.exit(1)});
