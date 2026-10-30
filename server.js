@@ -1,4 +1,5 @@
 import express from 'express';
+import { installTempleSync, initTempleSync } from './temple-sync.js';
 import pg from 'pg';
 import crypto from 'node:crypto';
 import path from 'node:path';
