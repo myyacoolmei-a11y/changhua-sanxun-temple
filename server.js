@@ -13,7 +13,7 @@ const hashToken=x=>crypto.createHash('sha256').update(x).digest('hex');
 const hashPass=(password,salt=crypto.randomBytes(16).toString('hex'))=>salt+':'+crypto.scryptSync(password,salt,64).toString('hex');
 const verifyPass=(password,saved)=>{try{const [salt,hex]=saved.split(':');return crypto.timingSafeEqual(Buffer.from(hex,'hex'),crypto.scryptSync(password,salt,64))}catch{return false}};
 const cookieOpts={httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/'};
-app.use(express.json({limit:'32kb'}));app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');res.setHeader('Cache-Control','no-store');next()});
+app.use(express.json({limit:'8mb'}));app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');res.setHeader('Cache-Control','no-store');next()});
 const clean=s=>String(s||'').trim();
 async function init(){
  await pool.query(`create table if not exists temple_users (id bigserial primary key, username text not null unique, display_name text not null, title text not null default '', password_hash text not null, is_admin boolean not null default false, enabled boolean not null default true, permissions jsonb not null default '[]'::jsonb, created_at timestamptz not null default now());`);
