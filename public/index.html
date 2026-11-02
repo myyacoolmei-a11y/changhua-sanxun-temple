@@ -86,7 +86,7 @@ function modulePage(name){const fields=fieldMap[name];document.getElementById('c
 function openEditor(name,id){const r=id?db[name].find(x=>x._id===id):null;const fields=fieldMap[name];document.getElementById('editOverlay')?.remove();let html=`<div class="modalBackdrop" id="editOverlay"><div class="modalBox"><h2>${r?'編輯':'新增'}${esc(name)}資料</h2><div class="muted" style="font-size:12px">資料將依目前帳號授權與雲端同步狀態儲存</div><form id="recordForm"><div class="formGrid">${fields.map((k,i)=>{const val=r?.[k]??'';const isLong=/備註|紀錄|關懷內容|家庭成員|地址|連結|摘要/.test(k);const opt=choices[k];const roleField=k==='宮廟職位';const typ=/日期|生日|期限|聯繫|提醒|參訪/.test(k)&&!k.includes('農曆')?'date':/金額|費用|人數/.test(k)?'text':'text';return `<label class="field ${isLong?'wide':''}"><span>${esc(k)}</span>${roleField?`<div class="sx-role-options">${templeRoles.map(v=>`<label class="sx-role-option"><input type="checkbox" name="roleChoice" value="${esc(v)}" ${String(val).split('、').includes(v)?'checked':''}>${esc(v)}</label>`).join('')}</div><input name="roleOther" placeholder="其他職位（可自行輸入）" value="${esc(String(val).split('、').filter(v=>!templeRoles.includes(v)).join('、'))}">`:opt?`<select name="f${i}"><option value="">請選擇</option>${opt.map(v=>`<option value="${esc(v)}" ${val===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:isLong?`<textarea name="f${i}">${esc(val)}</textarea>`:`<input name="f${i}" type="${typ}" value="${esc(val)}" ${i===0?'required':''} placeholder="請輸入${esc(k)}">`}</label>`}).join('')}</div><div class="modalActions"><button type="button" class="secondary" onclick="document.getElementById('editOverlay').remove()">取消</button><button class="primary" type="submit">儲存資料</button></div></form></div></div>`;document.body.insertAdjacentHTML('beforeend',html);document.getElementById('recordForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);const record={...(r||{}),_id:r?._id||newId()};fields.forEach((k,i)=>record[k]=k==='宮廟職位'?[...f.getAll('roleChoice'),...String(f.get('roleOther')||'').split(/[、,，]/).map(x=>x.trim()).filter(Boolean)].join('、'):String(f.get('f'+i)||'').trim());if(r){const idx=db[name].findIndex(x=>x._id===r._id);db[name][idx]=record}else db[name].unshift(record);persist();document.getElementById('editOverlay').remove();modulePage(name)}}
 function deleteRecord(name,id){if(!confirm('確定要刪除這筆示範資料嗎？'))return;db[name]=db[name].filter(x=>x._id!==id);persist();modulePage(name)}
 function exportCsv(name){const fields=fieldMap[name];const csv='\ufeff'+[fields,...db[name].map(r=>fields.map(k=>r[k]||''))].map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=name+'-示範資料.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-function home(){const follower=db['信眾管理'].length;const donations=db['功德箱管理'].reduce((a,r)=>a+money(r['金額']),0);const rituals=db['儀式管理'].length;const activities=db['活動管理'].length;const birthdays=db['生日提醒'].length;const upcoming=db['活動管理'].slice(0,3);const tasks=db['宮務行政'].slice(0,4);document.getElementById('content').innerHTML=`<div class="hero"><div><div class="eyebrow">— 哪吒元帥 —</div><h1>彰化三巡府</h1><p>護佑眾生・廣結善緣</p><p style="font-size:12px;letter-spacing:1px">四海平安　｜　三巡護佑　｜　風調雨順</p></div><div class="motto">三巡護佑　四海平安</div></div><section class="stats">${[['♟','信眾總數',follower,'信眾管理'],['♥','功德捐款',fmt(donations),'功德箱管理'],['❀','儀式登記',rituals,'儀式管理'],['▦','活動紀錄',activities,'活動管理'],['♙','生日提醒',birthdays,'生日提醒']].map(([i,t,n,link])=>`<div class="stat" onclick="go('${link}')"><span class="ico">${i}</span><div class="label">${t}</div><div class="num">${esc(n)}</div><div class="up">查看紀錄 ↗</div></div>`).join('')}</section><div class="panels"><section class="panel"><h3>▦　近期活動 <button class="secondary tiny" style="float:right" onclick="go('活動管理')">查看全部</button></h3>${upcoming.map(r=>`<div class="activity"><div class="date">${esc(r['活動日期']||'待定')}</div><div><div class="name">${esc(r['活動名稱'])}</div><div class="meta">${esc(r['活動時間']||'活動時間待定')}</div></div><span class="tag">${esc(r['狀態']||'已建立')}</span></div>`).join('')||'<p class="muted">尚無活動</p>'}</section><section class="panel"><h3>▤　宮務待辦 <button class="secondary tiny" style="float:right" onclick="go('宮務行政')">查看全部</button></h3>${tasks.map(r=>`<div class="todo"><span class="dot"></span>${esc(r['工作事項'])}<time>${esc(r['期限']||'—')}</time></div>`).join('')||'<p class="muted">尚無待辦事項</p>'}<h3 style="margin-top:24px">♧　關懷提醒</h3><div class="reminder">目前共有 ${db['關懷追蹤'].length} 筆關懷追蹤紀錄</div></section><section class="panel"><h3>▥　財務概覽</h3><div class="chartcaption">示範資料統計</div>${[['功德箱捐款',fmt(donations)],['財務收入',fmt(db['財務管理'].filter(r=>r['收支類型']==='收入').reduce((a,r)=>a+money(r['金額']),0))],['財務支出',fmt(db['財務管理'].filter(r=>r['收支類型']==='支出').reduce((a,r)=>a+money(r['金額']),0))]].map(([k,v])=>`<div class="legend"><i></i>${k}<b>${v}</b></div>`).join('')}<button class="secondary" onclick="go('財務管理')">查看財務明細 →</button></section></div><div class="notice">可編輯示範資料版｜首頁統計依本機示範資料更新。資料不會同步至正式資料庫，請勿輸入真實信眾個資。</div>`}
+function home(){const follower=db['信眾管理'].length;const donations=db['功德箱管理'].reduce((a,r)=>a+money(r['金額']),0);const rituals=db['儀式管理'].length;const activities=db['活動管理'].length;const birthdays=db['生日提醒'].length;const upcoming=db['活動管理'].slice(0,3);const tasks=db['宮務行政'].slice(0,4);document.getElementById('content').innerHTML=`<div class="hero"><div><div class="eyebrow">— 哪吒元帥 —</div><h1>彰化三巡府</h1><p>護佑眾生・廣結善緣</p><p style="font-size:12px;letter-spacing:1px">四海平安　｜　三巡護佑　｜　風調雨順</p></div><div class="motto">三巡護佑　四海平安</div></div><section class="stats">${[['♟','信眾總數',follower,'信眾管理'],['♥','功德捐款',fmt(donations),'功德箱管理'],['❀','儀式登記',rituals,'儀式管理'],['▦','活動紀錄',activities,'活動管理'],['♙','生日提醒',birthdays,'生日提醒']].map(([i,t,n,link])=>`<div class="stat" onclick="go('${link}')"><span class="ico">${i}</span><div class="label">${t}</div><div class="num">${esc(n)}</div><div class="up">查看紀錄 ↗</div></div>`).join('')}</section><div class="panels"><section class="panel"><h3>▦　近期活動 <button class="secondary tiny" style="float:right" onclick="go('活動管理')">查看全部</button></h3>${upcoming.map(r=>`<div class="activity"><div class="date">${esc(r['活動日期']||'待定')}</div><div><div class="name">${esc(r['活動名稱'])}</div><div class="meta">${esc(r['活動時間']||'活動時間待定')}</div></div><span class="tag">${esc(r['狀態']||'已建立')}</span></div>`).join('')||'<p class="muted">尚無活動</p>'}</section><section class="panel"><h3>▤　宮務待辦 <button class="secondary tiny" style="float:right" onclick="go('宮務行政')">查看全部</button></h3>${tasks.map(r=>`<div class="todo"><span class="dot"></span>${esc(r['工作事項'])}<time>${esc(r['期限']||'—')}</time></div>`).join('')||'<p class="muted">尚無待辦事項</p>'}<h3 style="margin-top:24px">♧　關懷提醒</h3><div class="reminder">目前共有 ${db['關懷追蹤'].length} 筆關懷追蹤紀錄</div></section><section class="panel"><h3>▥　財務概覽</h3><div class="chartcaption">示範資料統計</div>${[['功德箱捐款',fmt(donations)],['財務收入',fmt(db['財務管理'].filter(r=>r['收支類型']==='收入').reduce((a,r)=>a+money(r['金額']),0))],['財務支出',fmt(db['財務管理'].filter(r=>r['收支類型']==='支出').reduce((a,r)=>a+money(r['金額']),0))]].map(([k,v])=>`<div class="legend"><i></i>${k}<b>${v}</b></div>`).join('')}<button class="secondary" onclick="go('財務管理')">查看財務明細 →</button></section></div><div class="notice">首頁統計依目前載入資料計算。請至「宮務行政 → 系統設定」確認雲端連線及備份狀態。</div>`}
 function filterRows(){renderRows(current,document.getElementById('filter')?.value||'')}
 window.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('editOverlay')?.remove()});
 go('首頁總覽');
@@ -109,7 +109,7 @@ renderRows = function(name,q=''){
  if(name!=='信眾管理')return oldRenderRows(name,q);
  const fields=fieldMap[name],filtered=db[name].filter(r=>[...fields.map(k=>r[k]),relationText(r._id)].some(v=>String(v||'').toLowerCase().includes(q.toLowerCase())));
  document.getElementById('rows').innerHTML=filtered.map(r=>`<tr>${fields.map(k=>`<td>${displayVal(k,r[k])}</td>`).join('')}<td>${familyLinks(r._id).length?familyLinks(r._id).map(link=>`<div><button class="family-link" onclick="openEditor('信眾管理','${link.id}')">${esc(familyName(link.id))}</button><span class="family-small">（${esc(link.type)}）</span></div>`).join(''):'<span class="family-small">未設定</span>'}</td><td style="white-space:nowrap"><button class="secondary tiny" onclick="openEditor('信眾管理','${r._id}')">編輯</button> <button class="secondary tiny danger" onclick="deleteRecord('信眾管理','${r._id}')">刪除</button></td></tr>`).join('')||`<tr><td colspan="${fields.length+2}" style="text-align:center;padding:35px">沒有符合資料</td></tr>`;
- document.getElementById('count').textContent=`共 ${filtered.length} 筆資料（本機示範資料）`;
+ document.getElementById('count').textContent=`共 ${filtered.length} 筆資料`;
 }
 const oldModulePage=modulePage;
 modulePage = function(name){oldModulePage(name);if(name==='信眾管理'){
@@ -331,7 +331,7 @@ go=function(name){previousGo(name);if(name==='參與紀錄'){const c=document.ge
    const b=md(p['國曆生日']);const date=b?b.month+'/'+b.day:'—';
    return '<tr><td><b>'+esc(p['姓名']||'—')+'</b></td><td>'+esc(p['宮廟職位']||'一般信眾')+'</td><td>'+esc(p['電話']||'—')+'</td><td>'+esc(date)+'</td><td>'+relations+'</td><td class="birthday-cell">'+(b&&b.month===new Date().getMonth()+1?birthdayLabel(p):'<span class="mini">—</span>')+'</td><td><button class="profile-action" onclick="sanxunProfile(\''+p._id+'\')">📋 查看歷史紀錄</button></td><td><button class="secondary tiny" onclick="openEditor(\'信眾管理\',\''+p._id+'\')">編輯</button> <button class="secondary tiny danger" onclick="deleteRecord(\'信眾管理\',\''+p._id+'\')">刪除</button></td></tr>';
   }).join('')||'<tr><td colspan="8" style="text-align:center;padding:30px">目前沒有符合的信眾</td></tr>';
-  const count=document.getElementById('count');if(count)count.textContent='共 '+people.length+' 筆資料（本機示範資料）';
+  const count=document.getElementById('count');if(count)count.textContent='共 '+people.length+' 筆資料';
  }
  const oldPage=modulePage;modulePage=function(name){oldPage(name);if(name==='信眾管理')cleanRoster()};
  const oldRender=renderRows;renderRows=function(name,q=''){oldRender(name,q);if(name==='信眾管理')cleanRoster()};
@@ -556,7 +556,7 @@ renderChecks([]);load().catch(ex=>document.getElementById('sx-list').textContent
 })();
 </script>
 <script id="sanxun-linked-ledger-fix">
-/* 三巡府模組關聯顯示修正：從現有資料推算，不建立重複交易、不改寫資料庫。 */
+/* 舊版關聯表：保留原始計算供相容，最終由新版統一顯示覆蓋。 */
 (function(){
  const MODULE='參與紀錄';
  const list=(name)=>Array.isArray(db[name])?db[name]:[];
@@ -702,6 +702,77 @@ renderChecks([]);load().catch(ex=>document.getElementById('sx-list').textContent
   new MutationObserver(()=>{if(!moved)relocate()}).observe(document.body,{childList:true,subtree:true});
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else void boot();
+})();
+
+</script>
+<script id="sanxun-unified-ledger-v3">
+/* Sanxun 2026-11-02: single read-only cross-module ledger; original records untouched. */
+(function(){
+ 'use strict';
+ const arr=name=>Array.isArray(db[name])?db[name]:[];
+ const norm=v=>String(v??'').trim();
+ const people=()=>arr('信眾管理');
+ const who=row=>{
+   const id=norm(row.personId||row['信眾ID']||row.believerId||row.person_id);
+   if(id)return people().find(p=>norm(p._id)===id)||null;
+   const label=norm(row['信眾']||row['信眾姓名']||row['姓名']||row['捐款人']);
+   if(!label)return null;
+   const matches=people().filter(p=>norm(p['姓名'])===label);
+   return matches.length===1?matches[0]:null;
+ };
+ const matching=(row,id)=>who(row)?._id===id;
+ const num=v=>money(v);
+ const asDate=r=>r['參與日期']||r['辦理日期']||r['活動日期']||r['捐款日期']||r['日期']||'';
+ function ledger(personId){
+   const rows=[];
+   Object.entries(rosters||{}).forEach(([aid,rs])=>{
+     if(!Array.isArray(rs))return;
+     rs.filter(r=>matching(r,personId)).forEach(r=>{
+       const a=activityById(aid);
+       rows.push({date:a?.['活動日期']||'',kind:'活動參與',source:'活動名冊',name:a?.['活動名稱']||'活動已移除',detail:(r.rituals||[]).map(x=>x.name).filter(Boolean).join('、'),fee:due(r),paid:amount(r),action:aid});
+     });
+   });
+   arr('參與紀錄').filter(r=>matching(r,personId)).forEach(r=>{
+     const event=norm(r['活動／服務']),ritual=norm(r['儀式項目']);
+     rows.push({date:asDate(r),kind:ritual?'儀式補登':'參與補登',source:'參與紀錄',name:event||ritual||'一般參與',detail:[ritual&&event?`儀式：${ritual}`:'',r['備註']].filter(Boolean).join('；'),fee:null,paid:null,donation:num(r['捐款金額']),action:null});
+   });
+   arr('儀式管理').filter(r=>matching(r,personId)).forEach(r=>rows.push({date:asDate(r),kind:'儀式登記',source:'儀式管理',name:r['儀式項目']||'儀式',detail:r['狀態']||'',fee:num(r['費用']),paid:null,action:null}));
+   arr('功德箱管理').filter(r=>matching(r,personId)).forEach(r=>rows.push({date:asDate(r),kind:'功德捐款',source:'功德箱管理',name:r['捐款項目']||'功德箱',detail:r['收據編號']||'',fee:num(r['金額']),paid:num(r['金額']),action:null}));
+   arr('財務管理').filter(r=>matching(r,personId)).forEach(r=>rows.push({date:asDate(r),kind:'財務紀錄',source:'財務管理',name:r['摘要']||r['分類']||'財務紀錄',detail:r['收支類型']||'',fee:num(r['金額']),paid:r['收支類型']==='收入'?num(r['金額']):null,action:null}));
+   return rows.sort((a,b)=>norm(b.date).localeCompare(norm(a.date)));
+ }
+ function total(personId){const xs=ledger(personId);return {activities:xs.filter(x=>x.kind==='活動參與'||x.kind==='參與補登').length,rituals:xs.filter(x=>x.kind==='儀式登記'||x.kind==='儀式補登').length,paid:xs.filter(x=>x.kind==='活動參與').reduce((sum,x)=>sum+x.paid,0),unpaid:xs.filter(x=>x.kind==='活動參與').reduce((sum,x)=>sum+Math.max(0,x.fee-x.paid),0)};}
+ window.sanxunProfile=function(id,tab='全部歷史'){
+   const p=people().find(x=>x._id===id);if(!p){alert('找不到信眾');return}
+   const rows=ledger(id);
+   const groups={'全部歷史':()=>true,'活動參與':x=>x.kind==='活動參與'||x.kind==='參與補登','功德捐款':x=>x.kind==='功德捐款','儀式登記':x=>x.kind==='儀式登記'||x.kind==='儀式補登','財務紀錄':x=>x.kind==='財務紀錄'};
+   if(!(tab in groups))tab='全部歷史';
+   const filtered=rows.filter(groups[tab]),summary=total(id);
+   const filterBtns=Object.keys(groups).map(label=>`<button class="${tab===label?'on':''}" onclick="sanxunProfile(${JSON.stringify(id).replace(/"/g,'&quot;')},${JSON.stringify(label).replace(/"/g,'&quot;')})">${esc(label)}</button>`).join('');
+   const html=filtered.map(r=>{
+     const show=v=>v===null?'待核對':fmt(v);
+     const remain=r.fee!==null&&r.paid!==null?Math.max(0,r.fee-r.paid):null;
+     let hint='未確認收款';
+     if(remain!==null)hint=remain>0?'未收 '+fmt(remain):'已登錄';
+     const detail=r.donation?'；補登捐款金額 '+fmt(r.donation)+'（未確認入帳）':'';
+     const action=r.action?`<button class="secondary tiny" onclick="showActivity('${esc(r.action)}')">查看活動名冊</button>`:'—';
+     return `<tr><td>${esc(r.date||'—')}</td><td>${esc(r.kind)}</td><td>${esc(r.name)}</td><td>${esc((r.detail||'—')+detail)}</td><td>${show(r.fee)}</td><td>${show(r.paid)}</td><td>${esc(hint)}</td><td>${action}</td></tr>`;
+   }).join('')||'<tr><td colspan="8" style="padding:24px;text-align:center">此分類沒有關聯紀錄</td></tr>';
+   document.getElementById('content').innerHTML=`<div class="moduleHead"><div><button class="secondary" onclick="go('信眾管理')">← 返回信眾管理</button><h1 style="margin-top:12px">${esc(p['姓名'])}｜個人參與及收款歷史</h1><p>彙整活動名冊、參與補登、儀式、功德箱及已登錄財務資料</p></div><button class="primary" onclick="go('財務管理')">查看財務管理 →</button></div><div class="profile-metrics"><div>活動參與／補登<strong>${summary.activities} 次</strong></div><div>活動已收<strong>${fmt(summary.paid)}</strong></div><div>活動未收<strong>${fmt(summary.unpaid)}</strong></div></div><div class="profile-tabs">${filterBtns}</div><div class="datawrap"><div class="tableScroll"><table><thead><tr><th>日期</th><th>來源</th><th>活動／項目</th><th>內容</th><th>應收／金額</th><th>已收</th><th>狀態</th><th>操作</th></tr></thead><tbody>${html}</tbody></table></div></div><div class="notice">同一位信眾優先用唯一 ID 關聯；舊紀錄沒有 ID 時，僅在姓名唯一相符時顯示。同名紀錄不自動配對。補登金額、儀式費用與財務收入不重複加總；沒有對應付款憑據時顯示「待核對」。本頁不新增、不修改任何交易。</div>`;
+ };
+ // 參與紀錄的彙整表與個人頁共用同一個計算來源。
+ function enhance(){
+   if(current!=='參與紀錄')return;
+   const target=document.getElementById('liveParticipation');if(!target)return;
+   target.innerHTML=`<p class="mini">以下資料由活動名冊、參與紀錄與儀式管理即時彙整；未收款只計已確定應收的活動名冊。</p><div class="tableScroll"><table><thead><tr><th>信眾</th><th>活動／參與</th><th>儀式／補登</th><th>活動已收</th><th>活動未收</th><th>操作</th></tr></thead><tbody>${people().map(p=>{const t=total(p._id);return `<tr><td>${esc(p['姓名']||'—')}</td><td>${t.activities}</td><td>${t.rituals}</td><td>${fmt(t.paid)}</td><td>${fmt(t.unpaid)}</td><td><button class="link" onclick="sanxunProfile('${esc(p._id)}')">查看紀錄</button></td></tr>`}).join('')}</tbody></table></div>`;
+   const count=document.getElementById('count');if(count)count.textContent=`共 ${arr('參與紀錄').length} 筆直接登錄資料（另包含活動與儀式彙整）`;
+ }
+ const oldModule=modulePage;
+ modulePage=function(name){oldModule(name);if(name==='參與紀錄')enhance()};
+ const oldRender=renderRows;
+ renderRows=function(name,q=''){oldRender(name,q);if(name==='參與紀錄')enhance()};
+ window.sanxunLedgerVersion='2026-11-02-v3';
+ if(current==='參與紀錄')enhance();
 })();
 
 </script>
