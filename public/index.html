@@ -60,7 +60,7 @@ function modulePage(name){let d=sample[name];document.getElementById('content').
 /* Local-only editable demo. No real user information should be entered. */
 const storageKey='sanxun-demo-editable-v1';
 const fieldMap={
-'信眾管理':['姓名','宮廟職位','性別','電話','地址','國曆生日','農曆生日','出生時辰','家庭成員','備註'],
+'信眾管理':['姓名','宮廟職位','性別','電話','地址','國曆生日','農曆生日','出生時辰','家庭成員','介紹人','備註'],
 '功德箱管理':['捐款日期','捐款人','捐款項目','金額','收據編號','備註'],
 '關懷追蹤':['信眾','上次聯繫','關懷內容','下次提醒','負責人','狀態'],
 '活動管理':['活動名稱','活動日期','活動時間','地點','報名人數','活動費用','狀態','照片影片連結','活動紀錄'],
@@ -115,7 +115,7 @@ if(name==='財務管理'){
  sanxunFinanceRefreshCategory(form,String(r?.['分類']||''));
  typeSelect?.addEventListener('change',()=>{const category=form.elements['f'+fieldMap['財務管理'].indexOf('分類')];if(category)category.value='';sanxunFinanceRefreshCategory(form,'');});
 }
-document.getElementById('recordForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);const record={...(r||{}),_id:r?._id||newId()};fields.forEach((k,i)=>record[k]=k==='宮廟職位'?[...f.getAll('roleChoice'),...String(f.get('roleOther')||'').split(/[、,，]/).map(x=>x.trim()).filter(Boolean)].join('、'):String(f.get('f'+i)||'').trim());if(r){const idx=db[name].findIndex(x=>x._id===r._id);db[name][idx]=record}else db[name].unshift(record);persist();document.getElementById('editOverlay').remove();modulePage(name)}}
+document.getElementById('recordForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);const record={...(r||{}),_id:r?._id||newId()};fields.forEach((k,i)=>record[k]=k==='宮廟職位'?[...f.getAll('roleChoice'),...String(f.get('roleOther')||'').split(/[、,，]/).map(x=>x.trim()).filter(Boolean)].join('、'):String(f.get('f'+i)||'').trim());if(name==='信眾管理'){const ref=db['信眾管理'].filter(p=>p._id!==record._id&&p['姓名']===record['介紹人']);record._介紹人ID=ref.length===1?ref[0]._id:'';}if(r){const idx=db[name].findIndex(x=>x._id===r._id);db[name][idx]=record}else db[name].unshift(record);persist();document.getElementById('editOverlay').remove();modulePage(name)}}
 function deleteRecord(name,id){if(!confirm('確定要刪除這筆示範資料嗎？'))return;db[name]=db[name].filter(x=>x._id!==id);persist();modulePage(name)}
 function exportCsv(name){const fields=fieldMap[name];const csv='\ufeff'+[fields,...db[name].map(r=>fields.map(k=>r[k]||''))].map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=name+'-示範資料.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function home(){const follower=db['信眾管理'].length;const donations=db['功德箱管理'].reduce((a,r)=>a+money(r['金額']),0);const rituals=db['儀式管理'].length;const activities=db['活動管理'].length;const birthdays=db['生日提醒'].length;const upcoming=db['活動管理'].slice(0,3);const tasks=db['宮務行政'].slice(0,4);document.getElementById('content').innerHTML=`<div class="hero"><div><div class="eyebrow">— 哪吒元帥 —</div><h1>彰化三巡府</h1><p>護佑眾生・廣結善緣</p><p style="font-size:12px;letter-spacing:1px">四海平安　｜　三巡護佑　｜　風調雨順</p></div><div class="motto">三巡護佑　四海平安</div></div><section class="stats">${[['♟','信眾總數',follower,'信眾管理'],['♥','功德捐款',fmt(donations),'功德箱管理'],['❀','儀式登記',rituals,'儀式管理'],['▦','活動紀錄',activities,'活動管理'],['♙','生日提醒',birthdays,'生日提醒']].map(([i,t,n,link])=>`<div class="stat" onclick="go('${link}')"><span class="ico">${i}</span><div class="label">${t}</div><div class="num">${esc(n)}</div><div class="up">查看紀錄 ↗</div></div>`).join('')}</section><div class="panels"><section class="panel"><h3>▦　近期活動 <button class="secondary tiny" style="float:right" onclick="go('活動管理')">查看全部</button></h3>${upcoming.map(r=>`<div class="activity"><div class="date">${esc(r['活動日期']||'待定')}</div><div><div class="name">${esc(r['活動名稱'])}</div><div class="meta">${esc(r['活動時間']||'活動時間待定')}</div></div><span class="tag">${esc(r['狀態']||'已建立')}</span></div>`).join('')||'<p class="muted">尚無活動</p>'}</section><section class="panel"><h3>▤　宮務待辦 <button class="secondary tiny" style="float:right" onclick="go('宮務行政')">查看全部</button></h3>${tasks.map(r=>`<div class="todo"><span class="dot"></span>${esc(r['工作事項'])}<time>${esc(r['期限']||'—')}</time></div>`).join('')||'<p class="muted">尚無待辦事項</p>'}<h3 style="margin-top:24px">♧　關懷提醒</h3><div class="reminder">目前共有 ${db['關懷追蹤'].length} 筆關懷追蹤紀錄</div></section><section class="panel"><h3>▥　財務概覽</h3><div class="chartcaption">示範資料統計</div>${[['功德箱捐款',fmt(donations)],['財務收入',fmt(db['財務管理'].filter(r=>r['收支類型']==='收入').reduce((a,r)=>a+money(r['金額']),0))],['財務支出',fmt(db['財務管理'].filter(r=>r['收支類型']==='支出').reduce((a,r)=>a+money(r['金額']),0))]].map(([k,v])=>`<div class="legend"><i></i>${k}<b>${v}</b></div>`).join('')}<button class="secondary" onclick="go('財務管理')">查看財務明細 →</button></section></div><div class="notice">首頁統計依目前載入資料計算。請至「宮務行政 → 系統設定」確認雲端連線及備份狀態。</div>`}
@@ -297,7 +297,7 @@ window.sanxunAllPeople=function(){const f=document.getElementById('filter');if(f
 function events(y,m){const out=[];db['信眾管理'].forEach(p=>{const d=md(p['國曆生日']);if(d&&d.month===m+1&&d.day<=new Date(y,m+1,0).getDate())out.push({day:d.day,type:'birthday',text:'🎂 '+(p['姓名']||'信眾')+'生日'})});db['活動管理'].forEach(a=>{const d=String(a['活動日期']||'').match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);if(d&&+d[1]===y&&+d[2]===m+1){if(a._calendarType==='consultation'){if(a['狀態']!=='已取消')out.push({day:+d[3],type:'consultation-event',text:'🟡 '+(a['活動時間']||'')+' 問事：'+(a._booking?.name||'預約'),bookingId:a._id})}else out.push({day:+d[3],type:'activity-event',text:'📅 '+(a['活動名稱']||'宮廟活動')})}});return out}
 window.sanxunMoveMonth=function(delta){viewMonth+=delta;if(viewMonth<0){viewMonth=11;viewYear--}if(viewMonth>11){viewMonth=0;viewYear++}selectedDay=1;sanxunCalendar()};
 window.sanxunSelectDay=function(d){selectedDay=d;sanxunCalendar()};
-window.sanxunCalendar=function(){window.sanxunBookingDate=[viewYear,String(viewMonth+1).padStart(2,'0'),String(selectedDay).padStart(2,'0')].join('-');const today=new Date(),days=new Date(viewYear,viewMonth+1,0).getDate(),offset=new Date(viewYear,viewMonth,1).getDay(),ev=events(viewYear,viewMonth),count=ev.filter(e=>e.type==='birthday').length;let cells='';for(let i=0;i<offset;i++)cells+='<div class="calendar-day empty"></div>';for(let d=1;d<=days;d++){const items=ev.filter(e=>e.day===d);cells+='<div class="calendar-day '+(d===selectedDay?'selected ':'')+(d===today.getDate()&&viewMonth===today.getMonth()&&viewYear===today.getFullYear()?'is-today':'')+'" onclick="sanxunSelectDay('+d+')"><div class="day-number">'+d+'</div>'+items.slice(0,3).map(e=>'<span class="calendar-event '+e.type+'"'+(e.bookingId?' title="點選下方日期詳情可修改預約"':'')+'>'+esc(e.text)+'</span>').join('')+(items.length>3?'<span class="calendar-event">另有 '+(items.length-3)+' 項</span>':'')+'</div>'}const chosen=ev.filter(e=>e.day===selectedDay);document.getElementById('content').innerHTML='<div class="moduleHead"><div><h1>📅 行事曆</h1><p>生日、宮廟活動、問事預約共同顯示・點日期查看詳情</p></div><div class="actionbar"><button class="secondary" onclick="go(\'活動管理\')">＋ 新增活動</button><button class="primary sx-book-btn" onclick="sanxunOpenBooking()">＋ 問事預約</button></div></div><div class="datawrap"><div class="calendar-head"><h2>'+viewYear+' 年 '+(viewMonth+1)+' 月</h2><div><button onclick="sanxunMoveMonth(-1)">❮ 上個月</button> <button onclick="sanxunMoveMonth(1)">下個月 ❯</button></div></div><div class="birthday-summary"><div>🎂 本月生日<strong>'+count+' 位</strong></div><div>📅 本月活動<strong>'+ev.filter(e=>e.type==='activity-event').length+' 項</strong></div><div>🟡 問事預約<strong>'+ev.filter(e=>e.type==='consultation-event').length+' 筆</strong></div></div><div class="calendar-legend"><span style="background:#ffe0e9;color:#9d0036">🎂 粉紅色：信眾生日</span><span style="background:#dceefe;color:#104f94">📅 藍色：宮廟活動</span><span style="background:#fff0b3;color:#795200">🟡 黃色：問事預約</span></div><div class="calendar-grid">'+['日','一','二','三','四','五','六'].map(w=>'<div class="calendar-week">'+w+'</div>').join('')+cells+'</div><div class="calendar-details"><h3>📌 '+(viewMonth+1)+' 月 '+selectedDay+' 日行程</h3>'+(chosen.map(e=>'<div class="calendar-event '+e.type+'" style="font-size:15px;padding:12px;margin:8px 0">'+esc(e.text)+(e.bookingId?' <button class="secondary tiny" onclick="sanxunOpenBooking('+JSON.stringify(e.bookingId)+')">查看／修改預約</button>':'')+'</div>').join('')||'<p class="muted">這一天沒有生日、活動或問事預約</p>')+'</div></div><div class="notice">生日由信眾管理帶入；藍色活動及黃色問事預約均從共用資料讀取。資料是否已上雲端，以系統設定的同步狀態為準。農曆生日換算需另行實作。</div>'};
+window.sanxunCalendar=function(){window.sanxunBookingDate=[viewYear,String(viewMonth+1).padStart(2,'0'),String(selectedDay).padStart(2,'0')].join('-');const today=new Date(),days=new Date(viewYear,viewMonth+1,0).getDate(),offset=new Date(viewYear,viewMonth,1).getDay(),ev=events(viewYear,viewMonth),count=ev.filter(e=>e.type==='birthday').length;let cells='';for(let i=0;i<offset;i++)cells+='<div class="calendar-day empty"></div>';for(let d=1;d<=days;d++){const items=ev.filter(e=>e.day===d);cells+='<div class="calendar-day '+(d===selectedDay?'selected ':'')+(d===today.getDate()&&viewMonth===today.getMonth()&&viewYear===today.getFullYear()?'is-today':'')+'" onclick="sanxunSelectDay('+d+')"><div class="day-number">'+d+'</div>'+items.slice(0,3).map(e=>'<span class="calendar-event '+e.type+'"'+(e.bookingId?' title="點選下方日期詳情可修改預約"':'')+'>'+esc(e.text)+'</span>').join('')+(items.length>3?'<span class="calendar-event">另有 '+(items.length-3)+' 項</span>':'')+'</div>'}const chosen=ev.filter(e=>e.day===selectedDay);document.getElementById('content').innerHTML='<div class="moduleHead"><div><h1>📅 行事曆</h1><p>生日、宮廟活動、問事預約共同顯示・點日期查看詳情</p></div><div class="actionbar"><button class="secondary" onclick="sanxunOpenCalendarActivity()">＋ 新增活動</button><button class="primary sx-book-btn" onclick="sanxunOpenBooking()">＋ 問事預約</button></div></div><div class="datawrap"><div class="calendar-head"><h2>'+viewYear+' 年 '+(viewMonth+1)+' 月</h2><div><button onclick="sanxunMoveMonth(-1)">❮ 上個月</button> <button onclick="sanxunMoveMonth(1)">下個月 ❯</button></div></div><div class="birthday-summary"><div>🎂 本月生日<strong>'+count+' 位</strong></div><div>📅 本月活動<strong>'+ev.filter(e=>e.type==='activity-event').length+' 項</strong></div><div>🟡 問事預約<strong>'+ev.filter(e=>e.type==='consultation-event').length+' 筆</strong></div></div><div class="calendar-legend"><span style="background:#ffe0e9;color:#9d0036">🎂 粉紅色：信眾生日</span><span style="background:#dceefe;color:#104f94">📅 藍色：宮廟活動</span><span style="background:#fff0b3;color:#795200">🟡 黃色：問事預約</span></div><div class="calendar-grid">'+['日','一','二','三','四','五','六'].map(w=>'<div class="calendar-week">'+w+'</div>').join('')+cells+'</div><div class="calendar-details"><h3>📌 '+(viewMonth+1)+' 月 '+selectedDay+' 日行程</h3>'+(chosen.map(e=>'<div class="calendar-event '+e.type+'" style="font-size:15px;padding:12px;margin:8px 0">'+esc(e.text)+(e.bookingId?' <button class="secondary tiny" onclick="sanxunOpenBooking('+JSON.stringify(e.bookingId)+')">查看／修改預約</button>':'')+'</div>').join('')||'<p class="muted">這一天沒有生日、活動或問事預約</p>')+'</div></div><div class="notice">生日由信眾管理帶入；藍色活動及黃色問事預約均從共用資料讀取。資料是否已上雲端，以系統設定的同步狀態為準。農曆生日換算需另行實作。</div>'};
 const oldHome=home;home=function(){oldHome();const stats=document.querySelectorAll('.stat');if(stats[4]){const count=birthdayPeople(new Date().getMonth()+1).length;stats[4].querySelector('.label').textContent='🎂 本月壽星';stats[4].querySelector('.num').textContent=count;stats[4].onclick=()=>go('信眾管理')}const panel=document.querySelector('.panels .panel:nth-child(2)');if(panel){const people=birthdayPeople(new Date().getMonth()+1);panel.insertAdjacentHTML('beforeend','<h3 style="margin-top:24px">🎂 本月壽星</h3>'+(people.map(p=>'<div class="reminder">'+esc(p['姓名'])+'　'+birthdayLabel(p)+'</div>').join('')||'<p class="muted">本月尚無壽星</p>'))}};
 go=function(name){if(name==='行事曆'){current=name;drawNav();document.getElementById('side').classList.remove('open');sanxunCalendar();return}if(name==='信眾管理'){rosterTab='信眾資料';current=name;drawNav();document.getElementById('side').classList.remove('open');modulePage(name);return}previousGo(name)};
 if(!new URLSearchParams(location.search).has('register'))go('首頁總覽');
@@ -912,6 +912,148 @@ async function cloudReady(){
   return true;
  }catch(e){alert('無法安全儲存：'+e.message+'。請先檢查系統設定的同步狀態。');return false}
 }
+})();
+</script>
+
+<!-- 行事曆新增活動：保留在行事曆內填寫與檢視，記錄仍共用活動管理資料 -->
+<script id="sx-calendar-local-activity-editor">
+(function(){
+ 'use strict';
+ window.sanxunOpenCalendarActivity=function(id){
+   if(typeof openEditor!=='function'||typeof sanxunCalendar!=='function'){
+     alert('活動表單尚未載入，請重新整理');return;
+   }
+   // 使用活動管理原有完整表單及儲存機制，不新增第二份活動資料。
+   openEditor('活動管理', id||undefined);
+   const form=document.getElementById('recordForm');
+   if(!form)return;
+   const keys=fieldMap['活動管理'];
+   const index=keys.indexOf('活動日期');
+   if(!id&&index>=0){
+     const input=form.elements['f'+index];
+     if(input&&!input.value&&window.sanxunBookingDate)input.value=window.sanxunBookingDate;
+   }
+   const title=document.querySelector('#editOverlay h2');
+   if(title)title.textContent=(id?'編輯':'新增')+'宮廟活動';
+   const originalSubmit=form.onsubmit;
+   form.onsubmit=function(event){
+     if(typeof originalSubmit!=='function')return;
+     originalSubmit.call(form,event);
+     // 原本新增後自動導航活動管理，改回行事曆；不修改原始記錄或額外寫入。
+     if(!document.getElementById('editOverlay')&&typeof go==='function'){
+       go('行事曆');
+     }
+   };
+ };
+})();
+</script>
+
+<style id="sx-final-unified-roster-style">
+#content .sx-roster-table{width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse!important}
+#content .sx-roster-table th,#content .sx-roster-table td{white-space:normal!important;min-width:0!important;padding:14px 12px!important;vertical-align:middle!important;overflow-wrap:anywhere!important;text-align:left}
+#content .sx-roster-table th:nth-child(1){width:24%}#content .sx-roster-table th:nth-child(2){width:25%}#content .sx-roster-table th:nth-child(3){width:19%}
+#content .sx-roster-table th:nth-child(4){width:32%}
+#content .sx-roster-table td:last-child{display:table-cell!important}
+#content .sx-roster-table .sx-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+#content .sx-roster-table button{white-space:nowrap}
+#content .sx-roster-table .sx-detail{background:#087f7a;color:#fff;border:0;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:700}
+.sx-referrer-panel{padding:17px 20px;margin:12px 0 18px;background:#edf7f4;border:1px solid #d5e9e4;border-radius:14px}
+.sx-referrer-panel h3{margin:0 0 10px;font-size:16px}.sx-referrer-panel button{background:#fff;border:1px solid #bad8d2;padding:6px 11px;border-radius:8px;color:#087f7a;margin-left:8px}
+.sx-referrer-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.sx-referrer-list button{margin:0}
+.sx-calendar-link{margin-left:10px;border-radius:8px;border:1px solid #aacbd8;background:#fff;color:#075d71;padding:6px 10px;cursor:pointer}
+#content .tableScroll:has(.sx-roster-table){overflow:visible!important}
+@media(max-width:700px){
+ #content .sx-roster-table,#content .sx-roster-table tbody{display:block!important;min-width:0!important;width:100%!important}
+ #content .sx-roster-table thead{display:none!important}
+ #content .sx-roster-table tr{display:grid!important;grid-template-columns:1fr 1fr;gap:8px;align-items:center;border:1px solid #e0eae7;border-radius:14px;margin:0 0 12px;background:#fff;padding:14px!important}
+ #content .sx-roster-table td{display:block!important;border:0!important;padding:2px!important;width:auto!important;text-align:left!important}
+ #content .sx-roster-table td::before{content:attr(data-label);display:block!important;font-size:11px;color:#82949a;margin-bottom:4px}
+ #content .sx-roster-table td:first-child{font-size:17px;font-weight:800}
+ #content .sx-roster-table td:last-child{grid-column:1/-1}
+ #content .sx-roster-table td[colspan]{grid-column:1/-1}
+ #content .sx-roster-table .sx-actions{display:flex;gap:7px}
+}
+</style>
+<script id="sx-final-roster-referrer-and-calendar-links">
+(function(){
+ 'use strict';
+ // This must run after all legacy table decorators: one concise roster renderer is authoritative.
+ function peopleView(){
+   if(typeof db==='undefined'||!Array.isArray(db['信眾管理']))return;
+   const table=document.querySelector('#rows')?.closest('table');
+   if(!table || current!=='信眾管理' || (typeof rosterTab!=='undefined'&&rosterTab!=='信眾資料'))return;
+   table.className='sx-roster-table';
+   const q=(document.getElementById('filter')?.value||'').toLocaleLowerCase('zh-Hant').trim();
+   const people=db['信眾管理'].filter(p=>Object.values(p).some(v=>typeof v==='string'&&v.toLocaleLowerCase('zh-Hant').includes(q)));
+   const thead=table.querySelector('thead');
+   if(thead)thead.innerHTML='<tr><th>姓名</th><th>電話</th><th>生日</th><th>操作</th></tr>';
+   const body=table.querySelector('#rows');
+   body.innerHTML=people.map(p=>{
+     const pid=JSON.stringify(String(p._id)).replace(/"/g,'&quot;');
+     const d=String(p['國曆生日']||'');const nice=d?/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(d)?d.replace(/^\d{4}[-/]/,''):d:'—';
+     return '<tr><td data-label="姓名"><b>'+esc(p['姓名']||'—')+'</b></td><td data-label="電話">'+esc(p['電話']||'—')+'</td><td data-label="生日">'+esc(nice)+'</td><td data-label="操作"><div class="sx-actions"><button class="sx-detail" onclick="sanxunProfile('+pid+')">查看詳情</button><button class="secondary tiny" onclick="openEditor(\'信眾管理\','+pid+')">編輯</button><button class="secondary tiny danger" onclick="deleteRecord(\'信眾管理\','+pid+')">刪除</button></div></td></tr>';
+   }).join('')||'<tr><td colspan="4">沒有符合的信眾資料</td></tr>';
+   const count=document.getElementById('count');if(count)count.textContent='共 '+people.length+' 筆信眾';
+ }
+ // Override legacy final renderer only for roster, leave all other business modules untouched.
+ const priorRows=renderRows;
+ renderRows=function(name,q=''){
+   if(name==='信眾管理'){peopleView();return;}
+   return priorRows(name,q);
+ };
+ const priorPage=modulePage;
+ modulePage=function(name){priorPage(name);if(name==='信眾管理')peopleView()};
+ const priorEditor=openEditor;
+ openEditor=function(name,id){
+   priorEditor(name,id);
+   if(name!=='信眾管理')return;
+   const form=document.getElementById('recordForm');if(!form)return;
+   const index=fieldMap['信眾管理'].indexOf('介紹人');
+   const field=form.elements['f'+index];if(!field)return;
+   const list=document.createElement('datalist');list.id='sx-referrer-suggestions';
+   const currentRecord=id?db['信眾管理'].find(x=>x._id===id):null;
+   list.innerHTML=db['信眾管理'].filter(p=>p._id!==id).map(p=>'<option value="'+esc(p['姓名']||'')+'"></option>').join('');
+   field.setAttribute('list',list.id);field.setAttribute('placeholder','輸入介紹人姓名，或選擇現有信眾');
+   field.insertAdjacentElement('afterend',list);
+   const hint=document.createElement('small');hint.style.cssText='display:block;margin-top:5px;color:#62818a';
+   hint.textContent='若姓名唯一符合現有信眾，系統會自動連結；其他介紹人可直接輸入姓名。';
+   list.insertAdjacentElement('afterend',hint);
+ };
+ const oldProfile=window.sanxunProfile;
+ window.sanxunProfile=function(id,tab){
+   oldProfile(id,tab);
+   const p=db['信眾管理'].find(x=>x._id===id);if(!p)return;
+   const content=document.getElementById('content');const head=content?.querySelector('.moduleHead');if(!head)return;
+   content.querySelectorAll('.sx-referrer-panel').forEach(n=>n.remove());
+   const ref=p._介紹人ID?db['信眾管理'].find(x=>x._id===p._介紹人ID):null;
+   const name=p['介紹人']||ref?.['姓名']||'';
+   const byName=!ref && name?db['信眾管理'].filter(x=>x._id!==id&&x['姓名']===name):[];
+   const linked=ref||(byName.length===1?byName[0]:null);
+   const referred=db['信眾管理'].filter(x=>x._id!==id&&(x._介紹人ID===id||(!x._介紹人ID&&x['介紹人']===p['姓名'])));
+   const panel=document.createElement('section');panel.className='sx-referrer-panel';
+   panel.innerHTML='<h3>介紹人與推薦關係</h3><div><b>介紹人：</b>'+esc(name||'尚未設定')+(linked?' <button type="button" id="sx-referrer-view">查看介紹人檔案</button>':'')+'</div><p style="margin:12px 0 6px"><b>由此信眾介紹：</b>'+referred.length+' 人</p><div class="sx-referrer-list"></div>';
+   head.insertAdjacentElement('afterend',panel);
+   if(linked)panel.querySelector('#sx-referrer-view').onclick=()=>window.sanxunProfile(linked._id);
+   const box=panel.querySelector('.sx-referrer-list');
+   referred.forEach(other=>{const btn=document.createElement('button');btn.type='button';btn.textContent=other['姓名']||'未命名';btn.onclick=()=>window.sanxunProfile(other._id);box.appendChild(btn)});
+ };
+ // Calendar event buttons lead to the matching activity detail, not a new or duplicate activity.
+ const priorCalendar=window.sanxunCalendar;
+ window.sanxunCalendar=function(){
+   priorCalendar();
+   const details=document.querySelector('#content .calendar-details');if(!details)return;
+   const selected=window.sanxunBookingDate;
+   const events=db['活動管理'].filter(a=>a._calendarType!=='consultation'&&String(a['活動日期']||'').replaceAll('/','-')===selected);
+   const visible=details.querySelectorAll('.calendar-event.activity-event');
+   visible.forEach((el,i)=>{
+     const activity=events[i];if(!activity)return;
+     const btn=document.createElement('button');btn.type='button';btn.className='sx-calendar-link';btn.textContent='查看活動詳情';
+     btn.onclick=()=>{go('活動管理');if(typeof showActivity==='function')showActivity(activity._id)};
+     el.appendChild(btn);
+   });
+ };
+ if(current==='信眾管理')peopleView();
 })();
 </script>
 </body></html>
