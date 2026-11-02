@@ -72,6 +72,29 @@ const fieldMap={
 '宮務行政':['工作事項','負責人','期限','進度','類別','會議紀錄','組織成員','備註']};
 const templeRoles=['一般信眾','主任委員','副主任委員','榮譽主任委員','常務委員','管理委員','監察委員','總幹事','副總幹事','秘書','總務','財務','會計','出納','顧問','榮譽顧問','住持','法師','道長','乩身','桌頭','誦經團','爐主','副爐主','頭家','香燈腳','志工','義工'];
 const choices={'性別':['女','男','其他'],'狀態':['待處理','進行中','已完成','已取消'],'提醒狀態':['待祝福','已完成'],'收支類型':['收入','支出'],'進度':['待處理','進行中','已完成'],'儀式項目':['點燈','安太歲','補運','法會','祭改','迴向','陰債','嬰靈','普渡','其他']};
+
+/* 宮廟財務分類：依客戶提供的手寫收入／支出表建立，保留既有自訂分類。 */
+const sanxunFinanceCategories={
+ '收入':['禮金收入','辦事收入','點燈費收入','贊助收入','功德箱收入','節慶年費收入','香油錢收入','金紙錢收入','其他收入','法會收入'],
+ '支出':['金紙錢支出','香油錢支出','禮金支出','反饋費（煙酒、檳榔、飲料）','其他支出','文具用品','水電瓦斯費','雜項支出','雜項購置','慈善捐贈','薪資支出','祈福費','伙食費']
+};
+function sanxunFinanceOptions(type,oldCategory=''){
+ const choicesForType=sanxunFinanceCategories[type]||[];
+ const options=choicesForType.slice();
+ if(oldCategory&&!options.includes(oldCategory))options.push(oldCategory);
+ return options;
+}
+function sanxunFinanceRefreshCategory(form,oldValue=''){
+ const fields=fieldMap['財務管理'];
+ const type=form.elements['f'+fields.indexOf('收支類型')]?.value||'收入';
+ const cat=form.elements['f'+fields.indexOf('分類')];
+ if(!cat)return;
+ const previous=oldValue||cat.value;
+ const opts=sanxunFinanceOptions(type,previous);
+ cat.innerHTML='<option value="">請選擇'+(type==='收入'?'收入':'支出')+'分類</option>'+opts.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
+ cat.value=opts.includes(previous)?previous:'';
+}
+
 const originalSamples=JSON.parse(JSON.stringify(sample));
 function makeSamples(){const out={};for(const [name,def] of Object.entries(originalSamples)){out[name]=def.rows.map((r,i)=>{let obj={_id:name+'-'+i};def.cols.forEach((k,j)=>{let key=k==='信眾姓名'?'姓名':k==='聯絡電話'?'電話':k==='生日（國曆）'?'國曆生日':k==='捐款人'?'捐款人':k==='捐款項目'?'捐款項目':k==='活動日期'?'活動日期':k==='儀式項目'?'儀式項目':k==='日期'?(name==='功德箱管理'?'捐款日期':'日期'):k==='類別'&&name==='財務管理'?'分類':k==='收入'?'金額':k==='進度'?'進度':k;obj[key]=r[j]});if(name==='財務管理'){obj['收支類型']=r[3]!=='—'?'收入':'支出';obj['金額']=r[3]!=='—'?r[3]:r[4]}if(name==='信眾管理'){obj['備註']='示範資料';obj['性別']='';obj['地址']='';obj['農曆生日']='';obj['出生時辰']=''}if(name==='生日提醒'){obj['姓名']=r[0];obj['提醒狀態']=r[4]}if(name==='儀式管理')obj['儀式項目']=r[1];return obj})}return out}
 let db;try{const raw=localStorage.getItem(storageKey);db=raw?JSON.parse(raw):makeSamples()}catch(e){db=makeSamples()}for(const name of Object.keys(fieldMap)){if(!Array.isArray(db[name]))db[name]=[]}
@@ -83,8 +106,16 @@ function fmt(v){return 'NT$ '+v.toLocaleString('zh-TW')}
 function displayVal(k,v){return (k==='金額'||k==='費用'||k==='活動費用'||k==='捐款金額')&&v!==''&&v!=null?esc(String(v).startsWith('NT$')?v:fmt(money(v))):esc(v||'—')}
 function newId(){return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 function renderRows(name,q=''){const fields=fieldMap[name];const filtered=db[name].filter(r=>fields.some(k=>String(r[k]||'').toLowerCase().includes(q.toLowerCase())));document.getElementById('rows').innerHTML=filtered.map(r=>`<tr>${fields.map(k=>`<td>${displayVal(k,r[k])}</td>`).join('')}<td style="white-space:nowrap"><button class="secondary tiny" onclick="openEditor('${name}','${r._id}')">編輯</button> <button class="secondary tiny danger" onclick="deleteRecord('${name}','${r._id}')">刪除</button></td></tr>`).join('')||`<tr><td colspan="${fields.length+1}" style="text-align:center;padding:35px;color:#84999e">目前沒有符合的資料</td></tr>`;document.getElementById('count').textContent=`共 ${filtered.length} 筆資料`}
-function modulePage(name){const fields=fieldMap[name];document.getElementById('content').innerHTML=`<div class="moduleHead"><div><h1>${esc(name)}</h1><p>彰化三巡府 ／ ${esc(name)} ／ 資料管理</p></div><div class="actionbar"><button class="secondary" onclick="exportCsv('${name}')">↓ 匯出 CSV</button><button class="primary" onclick="openEditor('${name}')">＋ 新增資料</button></div></div><div class="datawrap"><div class="filters"><input id="filter" placeholder="⌕ 搜尋${esc(name)}..." oninput="renderRows('${name}',this.value)"></div><div class="countNote" id="count"></div><div class="tableScroll"><table><thead><tr>${fields.map(k=>`<th>${esc(k)}</th>`).join('')}<th>操作</th></tr></thead><tbody id="rows"></tbody></table></div></div><div class="notice">可新增、編輯、刪除示範資料。登入後的資料由雲端同步功能管理；請至「宮務行政 → 系統設定」查看同步狀態，並確認備份是否成功。</div>`;renderRows(name)}
-function openEditor(name,id){const r=id?db[name].find(x=>x._id===id):null;const fields=fieldMap[name];document.getElementById('editOverlay')?.remove();let html=`<div class="modalBackdrop" id="editOverlay"><div class="modalBox"><h2>${r?'編輯':'新增'}${esc(name)}資料</h2><div class="muted" style="font-size:12px">資料將依目前帳號授權與雲端同步狀態儲存</div><form id="recordForm"><div class="formGrid">${fields.map((k,i)=>{const val=r?.[k]??'';const isLong=/備註|紀錄|關懷內容|家庭成員|地址|連結|摘要/.test(k);const opt=choices[k];const roleField=k==='宮廟職位';const typ=/日期|生日|期限|聯繫|提醒|參訪/.test(k)&&!k.includes('農曆')?'date':/金額|費用|人數/.test(k)?'text':'text';return `<label class="field ${isLong?'wide':''}"><span>${esc(k)}</span>${roleField?`<div class="sx-role-options">${templeRoles.map(v=>`<label class="sx-role-option"><input type="checkbox" name="roleChoice" value="${esc(v)}" ${String(val).split('、').includes(v)?'checked':''}>${esc(v)}</label>`).join('')}</div><input name="roleOther" placeholder="其他職位（可自行輸入）" value="${esc(String(val).split('、').filter(v=>!templeRoles.includes(v)).join('、'))}">`:opt?`<select name="f${i}"><option value="">請選擇</option>${opt.map(v=>`<option value="${esc(v)}" ${val===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:isLong?`<textarea name="f${i}">${esc(val)}</textarea>`:`<input name="f${i}" type="${typ}" value="${esc(val)}" ${i===0?'required':''} placeholder="請輸入${esc(k)}">`}</label>`}).join('')}</div><div class="modalActions"><button type="button" class="secondary" onclick="document.getElementById('editOverlay').remove()">取消</button><button class="primary" type="submit">儲存資料</button></div></form></div></div>`;document.body.insertAdjacentHTML('beforeend',html);document.getElementById('recordForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);const record={...(r||{}),_id:r?._id||newId()};fields.forEach((k,i)=>record[k]=k==='宮廟職位'?[...f.getAll('roleChoice'),...String(f.get('roleOther')||'').split(/[、,，]/).map(x=>x.trim()).filter(Boolean)].join('、'):String(f.get('f'+i)||'').trim());if(r){const idx=db[name].findIndex(x=>x._id===r._id);db[name][idx]=record}else db[name].unshift(record);persist();document.getElementById('editOverlay').remove();modulePage(name)}}
+function modulePage(name){const fields=fieldMap[name];document.getElementById('content').innerHTML=`<div class="moduleHead"><div><h1>${esc(name)}</h1><p>彰化三巡府 ／ ${esc(name)} ／ 資料管理</p></div><div class="actionbar"><button class="secondary" onclick="exportCsv('${name}')">↓ 匯出 CSV</button><button class="primary" onclick="openEditor('${name}')">＋ 新增資料</button></div></div><div class="datawrap"><div class="filters"><input id="filter" placeholder="⌕ 搜尋${esc(name)}..." oninput="renderRows('${name}',this.value)"></div><div class="countNote" id="count"></div><div class="tableScroll"><table><thead><tr>${fields.map(k=>`<th>${esc(k)}</th>`).join('')}<th>操作</th></tr></thead><tbody id="rows"></tbody></table></div></div><div class="notice">可新增、編輯、刪除示範資料。登入後的資料由雲端同步功能管理；請至「宮務行政 → 系統設定」查看同步狀態，並確認備份是否成功。</div>`;renderRows(name);if(name==='財務管理'){const el=document.querySelector('#content .datawrap');if(el){const p=document.createElement('p');p.className='notice';p.textContent='新增財務時，先選收入／支出，再選客戶指定的財務分類。舊紀錄與自訂分類保留；問事預約不會自動列入收入。';el.appendChild(p)}}}
+function openEditor(name,id){const r=id?db[name].find(x=>x._id===id):null;const fields=fieldMap[name];document.getElementById('editOverlay')?.remove();let html=`<div class="modalBackdrop" id="editOverlay"><div class="modalBox"><h2>${r?'編輯':'新增'}${esc(name)}資料</h2><div class="muted" style="font-size:12px">資料將依目前帳號授權與雲端同步狀態儲存</div><form id="recordForm"><div class="formGrid">${fields.map((k,i)=>{const val=r?.[k]??(name==='財務管理'&&k==='收支類型'?'收入':'');const isLong=/備註|紀錄|關懷內容|家庭成員|地址|連結|摘要/.test(k);const opt=(name==='財務管理'&&k==='分類')?sanxunFinanceOptions(r?.['收支類型']||'收入',String(val)):choices[k];const roleField=k==='宮廟職位';const typ=/日期|生日|期限|聯繫|提醒|參訪/.test(k)&&!k.includes('農曆')?'date':/金額|費用|人數/.test(k)?'text':'text';return `<label class="field ${isLong?'wide':''}"><span>${esc(k)}</span>${roleField?`<div class="sx-role-options">${templeRoles.map(v=>`<label class="sx-role-option"><input type="checkbox" name="roleChoice" value="${esc(v)}" ${String(val).split('、').includes(v)?'checked':''}>${esc(v)}</label>`).join('')}</div><input name="roleOther" placeholder="其他職位（可自行輸入）" value="${esc(String(val).split('、').filter(v=>!templeRoles.includes(v)).join('、'))}">`:opt?`<select name="f${i}"><option value="">請選擇</option>${opt.map(v=>`<option value="${esc(v)}" ${val===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:isLong?`<textarea name="f${i}">${esc(val)}</textarea>`:`<input name="f${i}" type="${typ}" value="${esc(val)}" ${i===0?'required':''} placeholder="請輸入${esc(k)}">`}</label>`}).join('')}</div><div class="modalActions"><button type="button" class="secondary" onclick="document.getElementById('editOverlay').remove()">取消</button><button class="primary" type="submit">儲存資料</button></div></form></div></div>`;document.body.insertAdjacentHTML('beforeend',html);
+if(name==='財務管理'){
+ const form=document.getElementById('recordForm');
+ const idx=fieldMap['財務管理'].indexOf('收支類型');
+ const typeSelect=form.elements['f'+idx];
+ sanxunFinanceRefreshCategory(form,String(r?.['分類']||''));
+ typeSelect?.addEventListener('change',()=>{const category=form.elements['f'+fieldMap['財務管理'].indexOf('分類')];if(category)category.value='';sanxunFinanceRefreshCategory(form,'');});
+}
+document.getElementById('recordForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);const record={...(r||{}),_id:r?._id||newId()};fields.forEach((k,i)=>record[k]=k==='宮廟職位'?[...f.getAll('roleChoice'),...String(f.get('roleOther')||'').split(/[、,，]/).map(x=>x.trim()).filter(Boolean)].join('、'):String(f.get('f'+i)||'').trim());if(r){const idx=db[name].findIndex(x=>x._id===r._id);db[name][idx]=record}else db[name].unshift(record);persist();document.getElementById('editOverlay').remove();modulePage(name)}}
 function deleteRecord(name,id){if(!confirm('確定要刪除這筆示範資料嗎？'))return;db[name]=db[name].filter(x=>x._id!==id);persist();modulePage(name)}
 function exportCsv(name){const fields=fieldMap[name];const csv='\ufeff'+[fields,...db[name].map(r=>fields.map(k=>r[k]||''))].map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=name+'-示範資料.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function home(){const follower=db['信眾管理'].length;const donations=db['功德箱管理'].reduce((a,r)=>a+money(r['金額']),0);const rituals=db['儀式管理'].length;const activities=db['活動管理'].length;const birthdays=db['生日提醒'].length;const upcoming=db['活動管理'].slice(0,3);const tasks=db['宮務行政'].slice(0,4);document.getElementById('content').innerHTML=`<div class="hero"><div><div class="eyebrow">— 哪吒元帥 —</div><h1>彰化三巡府</h1><p>護佑眾生・廣結善緣</p><p style="font-size:12px;letter-spacing:1px">四海平安　｜　三巡護佑　｜　風調雨順</p></div><div class="motto">三巡護佑　四海平安</div></div><section class="stats">${[['♟','信眾總數',follower,'信眾管理'],['♥','功德捐款',fmt(donations),'功德箱管理'],['❀','儀式登記',rituals,'儀式管理'],['▦','活動紀錄',activities,'活動管理'],['♙','生日提醒',birthdays,'生日提醒']].map(([i,t,n,link])=>`<div class="stat" onclick="go('${link}')"><span class="ico">${i}</span><div class="label">${t}</div><div class="num">${esc(n)}</div><div class="up">查看紀錄 ↗</div></div>`).join('')}</section><div class="panels"><section class="panel"><h3>▦　近期活動 <button class="secondary tiny" style="float:right" onclick="go('活動管理')">查看全部</button></h3>${upcoming.map(r=>`<div class="activity"><div class="date">${esc(r['活動日期']||'待定')}</div><div><div class="name">${esc(r['活動名稱'])}</div><div class="meta">${esc(r['活動時間']||'活動時間待定')}</div></div><span class="tag">${esc(r['狀態']||'已建立')}</span></div>`).join('')||'<p class="muted">尚無活動</p>'}</section><section class="panel"><h3>▤　宮務待辦 <button class="secondary tiny" style="float:right" onclick="go('宮務行政')">查看全部</button></h3>${tasks.map(r=>`<div class="todo"><span class="dot"></span>${esc(r['工作事項'])}<time>${esc(r['期限']||'—')}</time></div>`).join('')||'<p class="muted">尚無待辦事項</p>'}<h3 style="margin-top:24px">♧　關懷提醒</h3><div class="reminder">目前共有 ${db['關懷追蹤'].length} 筆關懷追蹤紀錄</div></section><section class="panel"><h3>▥　財務概覽</h3><div class="chartcaption">示範資料統計</div>${[['功德箱捐款',fmt(donations)],['財務收入',fmt(db['財務管理'].filter(r=>r['收支類型']==='收入').reduce((a,r)=>a+money(r['金額']),0))],['財務支出',fmt(db['財務管理'].filter(r=>r['收支類型']==='支出').reduce((a,r)=>a+money(r['金額']),0))]].map(([k,v])=>`<div class="legend"><i></i>${k}<b>${v}</b></div>`).join('')}<button class="secondary" onclick="go('財務管理')">查看財務明細 →</button></section></div><div class="notice">首頁統計依目前載入資料計算。請至「宮務行政 → 系統設定」確認雲端連線及備份狀態。</div>`}
@@ -263,10 +294,10 @@ function decorateBirthdayRows(){if(rosterTab!=='信眾資料'||current!=='信眾
 renderRows=function(name,q=''){previousRenderRows(name,q);if(name==='信眾管理')decorateBirthdayRows()};
 window.sanxunOnlyBirthdays=function(){document.querySelectorAll('#rows tr').forEach(tr=>{const v=tr.querySelector('.bday-badge');tr.style.display=v?'':'none'})};
 window.sanxunAllPeople=function(){const f=document.getElementById('filter');if(f)f.value='';renderRows('信眾管理')};
-function events(y,m){const out=[];db['信眾管理'].forEach(p=>{const d=md(p['國曆生日']);if(d&&d.month===m+1&&d.day<=new Date(y,m+1,0).getDate())out.push({day:d.day,type:'birthday',text:'🎂 '+(p['姓名']||'信眾')+'生日'})});db['活動管理'].forEach(a=>{const d=String(a['活動日期']||'').match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);if(d&&+d[1]===y&&+d[2]===m+1)out.push({day:+d[3],type:'activity-event',text:'📅 '+(a['活動名稱']||'宮廟活動')})});return out}
+function events(y,m){const out=[];db['信眾管理'].forEach(p=>{const d=md(p['國曆生日']);if(d&&d.month===m+1&&d.day<=new Date(y,m+1,0).getDate())out.push({day:d.day,type:'birthday',text:'🎂 '+(p['姓名']||'信眾')+'生日'})});db['活動管理'].forEach(a=>{const d=String(a['活動日期']||'').match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);if(d&&+d[1]===y&&+d[2]===m+1){if(a._calendarType==='consultation'){if(a['狀態']!=='已取消')out.push({day:+d[3],type:'consultation-event',text:'🟡 '+(a['活動時間']||'')+' 問事：'+(a._booking?.name||'預約'),bookingId:a._id})}else out.push({day:+d[3],type:'activity-event',text:'📅 '+(a['活動名稱']||'宮廟活動')})}});return out}
 window.sanxunMoveMonth=function(delta){viewMonth+=delta;if(viewMonth<0){viewMonth=11;viewYear--}if(viewMonth>11){viewMonth=0;viewYear++}selectedDay=1;sanxunCalendar()};
 window.sanxunSelectDay=function(d){selectedDay=d;sanxunCalendar()};
-window.sanxunCalendar=function(){const today=new Date(),days=new Date(viewYear,viewMonth+1,0).getDate(),offset=new Date(viewYear,viewMonth,1).getDay(),ev=events(viewYear,viewMonth),count=ev.filter(e=>e.type==='birthday').length;let cells='';for(let i=0;i<offset;i++)cells+='<div class="calendar-day empty"></div>';for(let d=1;d<=days;d++){const items=ev.filter(e=>e.day===d);cells+='<div class="calendar-day '+(d===selectedDay?'selected ':'')+(d===today.getDate()&&viewMonth===today.getMonth()&&viewYear===today.getFullYear()?'is-today':'')+'" onclick="sanxunSelectDay('+d+')"><div class="day-number">'+d+'</div>'+items.slice(0,3).map(e=>'<span class="calendar-event '+e.type+'">'+esc(e.text)+'</span>').join('')+(items.length>3?'<span class="calendar-event">另有 '+(items.length-3)+' 項</span>':'')+'</div>'}const chosen=ev.filter(e=>e.day===selectedDay);document.getElementById('content').innerHTML='<div class="moduleHead"><div><h1>📅 行事曆</h1><p>信眾生日、宮廟活動自動整合・點日期查看詳情</p></div><button class="primary" onclick="go(\'活動管理\')">＋ 新增活動</button></div><div class="datawrap"><div class="calendar-head"><h2>'+viewYear+' 年 '+(viewMonth+1)+' 月</h2><div><button onclick="sanxunMoveMonth(-1)">❮ 上個月</button> <button onclick="sanxunMoveMonth(1)">下個月 ❯</button></div></div><div class="birthday-summary"><div>🎂 本月生日<strong>'+count+' 位</strong></div><div>📅 本月活動<strong>'+ev.filter(e=>e.type==='activity-event').length+' 項</strong></div></div><div class="calendar-legend"><span style="background:#ffe0e9;color:#9d0036">🎂 粉紅色：信眾生日</span><span style="background:#dceefe;color:#104f94">📅 藍色：宮廟活動</span></div><div class="calendar-grid">'+['日','一','二','三','四','五','六'].map(w=>'<div class="calendar-week">'+w+'</div>').join('')+cells+'</div><div class="calendar-details"><h3>📌 '+(viewMonth+1)+' 月 '+selectedDay+' 日行程</h3>'+(chosen.map(e=>'<div class="calendar-event '+e.type+'" style="font-size:15px;padding:12px;margin:8px 0">'+esc(e.text)+'</div>').join('')||'<p class="muted">這一天沒有生日或活動</p>')+'</div></div><div class="notice">本機預覽：生日由信眾管理的國曆生日自動帶入；活動由活動管理的日期帶入。農曆生日換算需另行實作。</div>'};
+window.sanxunCalendar=function(){window.sanxunBookingDate=[viewYear,String(viewMonth+1).padStart(2,'0'),String(selectedDay).padStart(2,'0')].join('-');const today=new Date(),days=new Date(viewYear,viewMonth+1,0).getDate(),offset=new Date(viewYear,viewMonth,1).getDay(),ev=events(viewYear,viewMonth),count=ev.filter(e=>e.type==='birthday').length;let cells='';for(let i=0;i<offset;i++)cells+='<div class="calendar-day empty"></div>';for(let d=1;d<=days;d++){const items=ev.filter(e=>e.day===d);cells+='<div class="calendar-day '+(d===selectedDay?'selected ':'')+(d===today.getDate()&&viewMonth===today.getMonth()&&viewYear===today.getFullYear()?'is-today':'')+'" onclick="sanxunSelectDay('+d+')"><div class="day-number">'+d+'</div>'+items.slice(0,3).map(e=>'<span class="calendar-event '+e.type+'"'+(e.bookingId?' title="點選下方日期詳情可修改預約"':'')+'>'+esc(e.text)+'</span>').join('')+(items.length>3?'<span class="calendar-event">另有 '+(items.length-3)+' 項</span>':'')+'</div>'}const chosen=ev.filter(e=>e.day===selectedDay);document.getElementById('content').innerHTML='<div class="moduleHead"><div><h1>📅 行事曆</h1><p>生日、宮廟活動、問事預約共同顯示・點日期查看詳情</p></div><div class="actionbar"><button class="secondary" onclick="go(\'活動管理\')">＋ 新增活動</button><button class="primary sx-book-btn" onclick="sanxunOpenBooking()">＋ 問事預約</button></div></div><div class="datawrap"><div class="calendar-head"><h2>'+viewYear+' 年 '+(viewMonth+1)+' 月</h2><div><button onclick="sanxunMoveMonth(-1)">❮ 上個月</button> <button onclick="sanxunMoveMonth(1)">下個月 ❯</button></div></div><div class="birthday-summary"><div>🎂 本月生日<strong>'+count+' 位</strong></div><div>📅 本月活動<strong>'+ev.filter(e=>e.type==='activity-event').length+' 項</strong></div><div>🟡 問事預約<strong>'+ev.filter(e=>e.type==='consultation-event').length+' 筆</strong></div></div><div class="calendar-legend"><span style="background:#ffe0e9;color:#9d0036">🎂 粉紅色：信眾生日</span><span style="background:#dceefe;color:#104f94">📅 藍色：宮廟活動</span><span style="background:#fff0b3;color:#795200">🟡 黃色：問事預約</span></div><div class="calendar-grid">'+['日','一','二','三','四','五','六'].map(w=>'<div class="calendar-week">'+w+'</div>').join('')+cells+'</div><div class="calendar-details"><h3>📌 '+(viewMonth+1)+' 月 '+selectedDay+' 日行程</h3>'+(chosen.map(e=>'<div class="calendar-event '+e.type+'" style="font-size:15px;padding:12px;margin:8px 0">'+esc(e.text)+(e.bookingId?' <button class="secondary tiny" onclick="sanxunOpenBooking('+JSON.stringify(e.bookingId)+')">查看／修改預約</button>':'')+'</div>').join('')||'<p class="muted">這一天沒有生日、活動或問事預約</p>')+'</div></div><div class="notice">生日由信眾管理帶入；藍色活動及黃色問事預約均從共用資料讀取。資料是否已上雲端，以系統設定的同步狀態為準。農曆生日換算需另行實作。</div>'};
 const oldHome=home;home=function(){oldHome();const stats=document.querySelectorAll('.stat');if(stats[4]){const count=birthdayPeople(new Date().getMonth()+1).length;stats[4].querySelector('.label').textContent='🎂 本月壽星';stats[4].querySelector('.num').textContent=count;stats[4].onclick=()=>go('信眾管理')}const panel=document.querySelector('.panels .panel:nth-child(2)');if(panel){const people=birthdayPeople(new Date().getMonth()+1);panel.insertAdjacentHTML('beforeend','<h3 style="margin-top:24px">🎂 本月壽星</h3>'+(people.map(p=>'<div class="reminder">'+esc(p['姓名'])+'　'+birthdayLabel(p)+'</div>').join('')||'<p class="muted">本月尚無壽星</p>'))}};
 go=function(name){if(name==='行事曆'){current=name;drawNav();document.getElementById('side').classList.remove('open');sanxunCalendar();return}if(name==='信眾管理'){rosterTab='信眾資料';current=name;drawNav();document.getElementById('side').classList.remove('open');modulePage(name);return}previousGo(name)};
 if(!new URLSearchParams(location.search).has('register'))go('首頁總覽');
@@ -723,6 +754,7 @@ const rowid=r=>text(r._id||r.id);
 function records(){
  const out=[];
  const add=(source,r,kind,opts={})=>{const p=person(r);out.push({source,sourceId:rowid(r),personId:p?._id||null,personName:p?.['姓名']||names(r)[0]||'',date:date(r),kind,...opts})};
+ arr('活動管理').filter(r=>r._calendarType==='consultation').forEach(r=>{const b=r._booking||{};const p=people().find(x=>text(x._id)===text(b.personId));out.push({source:'問事預約',sourceId:rowid(r),personId:p?._id||null,personName:p?.['姓名']||text(b.name),date:text(r['活動日期']),kind:'問事預約',title:'問事預約｜'+text(b.subject||'一般問事'),note:text(r['活動時間'])+' '+text(r['狀態'])+' '+text(b.note),fee:null,paid:null,bookingId:rowid(r)})});
  arr('參與紀錄').forEach(r=>{
   const event=text(r['活動／服務']),ritual=text(r['儀式項目']);
   add('參與紀錄',r,ritual?'儀式補登':'活動補登',{title:event||ritual||'一般參與',ritual,event,note:text(r['備註']),fee:null,paid:null,donation:moneyNum(r['捐款金額'])});
@@ -739,14 +771,15 @@ function records(){
 function forPerson(id){return records().filter(r=>r.personId===id)}
 function totals(rows){return {activity:rows.filter(r=>['活動報名','活動補登'].includes(r.kind)).length,ritual:rows.filter(r=>['儀式登記','儀式補登'].includes(r.kind)).length,received:rows.filter(r=>r.kind==='活動報名').reduce((v,r)=>v+(r.paid||0),0),unpaid:rows.filter(r=>r.kind==='活動報名').reduce((v,r)=>v+Math.max(0,(r.fee||0)-(r.paid||0)),0)}}
 function keylink(r){
+ if(r.source==='問事預約'&&r.bookingId)return `<button class="link" onclick='sanxunOpenBooking(${JSON.stringify(r.bookingId)})'>查看預約</button>`;
  if(r.source==='活動名冊'&&r.activityId)return `<button class="link" onclick="showActivity('${esc(r.activityId)}')">活動名冊</button>`;
  if(r.source==='參與紀錄'||r.source==='儀式管理'||r.source==='財務管理'||r.source==='功德箱管理')return `<button class="link" onclick="go('${r.source}')">前往${r.source}</button>`;
  return '—';
 }
-function rowHtml(r){let state='未確認收款';if(r.kind==='活動報名')state=r.fee>r.paid?'未收 '+fmt(r.fee-r.paid):'活動已繳';else if(r.kind==='功德捐款')state='捐款登記';else if(r.kind==='財務紀錄')state='財務原始紀錄';return `<tr><td>${esc(r.date||'—')}</td><td>${esc(r.source)}</td><td>${esc(r.title)}</td><td>${esc([r.ritual&&r.ritual!==r.title?'儀式：'+r.ritual:'',r.note,r.donation?'補登捐款 '+fmt(r.donation)+'（未確認入帳）':''].filter(Boolean).join('；')||'—')}</td><td>${r.fee===null?'待核對':fmt(r.fee)}</td><td>${r.paid===null?'待核對':fmt(r.paid)}</td><td>${esc(state)}</td><td>${keylink(r)}</td></tr>`}
+function rowHtml(r){let state='未確認收款';if(r.kind==='問事預約')state='預約登記（非收款）';else if(r.kind==='活動報名')state=r.fee>r.paid?'未收 '+fmt(r.fee-r.paid):'活動已繳';else if(r.kind==='功德捐款')state='捐款登記';else if(r.kind==='財務紀錄')state='財務原始紀錄';return `<tr><td>${esc(r.date||'—')}</td><td>${esc(r.source)}</td><td>${esc(r.title)}</td><td>${esc([r.ritual&&r.ritual!==r.title?'儀式：'+r.ritual:'',r.note,r.donation?'補登捐款 '+fmt(r.donation)+'（未確認入帳）':''].filter(Boolean).join('；')||'—')}</td><td>${r.fee===null?'待核對':fmt(r.fee)}</td><td>${r.paid===null?'待核對':fmt(r.paid)}</td><td>${esc(state)}</td><td>${keylink(r)}</td></tr>`}
 window.sanxunProfile=function(id,tab='全部歷史'){
  const p=people().find(x=>text(x._id)===text(id));if(!p)return alert('找不到信眾');
- const tabs={'全部歷史':()=>true,'活動參與':r=>['活動報名','活動補登'].includes(r.kind),'功德捐款':r=>r.kind==='功德捐款','儀式登記':r=>['儀式登記','儀式補登'].includes(r.kind),'財務紀錄':r=>r.kind==='財務紀錄'};
+ const tabs={'全部歷史':()=>true,'活動參與':r=>['活動報名','活動補登'].includes(r.kind),'功德捐款':r=>r.kind==='功德捐款','儀式登記':r=>['儀式登記','儀式補登'].includes(r.kind),'財務紀錄':r=>r.kind==='財務紀錄','問事預約':r=>r.kind==='問事預約'};
  if(!tabs[tab])tab='全部歷史';const all=forPerson(id),summary=totals(all);
  document.getElementById('content').innerHTML=`<div class="moduleHead"><div><button class="secondary" onclick="go('信眾管理')">← 返回信眾管理</button><h1 style="margin-top:12px">${esc(p['姓名'])}｜個人參與及收款歷史</h1><p>由各管理頁讀取相同原始資料（直接補登不代表已收到款項）</p></div><button class="primary" onclick="go('財務管理')">查看財務管理 →</button></div><div class="profile-metrics"><div>活動／補登<strong>${summary.activity} 次</strong></div><div>儀式／補登<strong>${summary.ritual} 次</strong></div><div>活動已收<strong>${fmt(summary.received)}</strong></div><div>活動未收<strong>${fmt(summary.unpaid)}</strong></div></div><div class="profile-tabs">${Object.keys(tabs).map(label=>`<button class="${tab===label?'on':''}" onclick='sanxunProfile(${JSON.stringify(id)},${JSON.stringify(label)})'>${esc(label)}</button>`).join('')}</div><div class="datawrap"><div class="tableScroll"><table><thead><tr><th>日期</th><th>來源</th><th>活動／項目</th><th>內容</th><th>應收／金額</th><th>已收</th><th>狀態</th><th>操作</th></tr></thead><tbody>${all.filter(tabs[tab]).map(rowHtml).join('')||'<tr><td colspan="8">此分類沒有關聯紀錄</td></tr>'}</tbody></table></div></div><p class="notice">只有已登錄的活動名冊收款參與應收／已收統計；儀式費用、參與補登捐款不會自動當成收款。姓名只有唯一相符時才自動關聯；同名信眾需要補上信眾 ID。</p>`;
 };
@@ -768,12 +801,12 @@ function enhanceActivity(){
  if(current!=='活動管理')return;
  const extra=records().filter(r=>r.kind==='活動補登');const wrap=document.querySelector('#content .datawrap');if(!wrap)return;
  let section=document.getElementById('sx-activity-links');if(!section){section=document.createElement('section');section.id='sx-activity-links';wrap.appendChild(section)}
- const count=document.getElementById('count');if(count)count.textContent=`正式活動 ${arr('活動管理').length} 筆｜參與補登 ${extra.length} 筆`;
+ const count=document.getElementById('count');if(count)count.textContent=`正式活動 ${arr('活動管理').filter(r=>r._calendarType!=='consultation').length} 筆｜問事預約 ${arr('活動管理').filter(r=>r._calendarType==='consultation').length} 筆｜參與補登 ${extra.length} 筆`;
  section.innerHTML=`<h3 style="margin-top:22px">參與紀錄中的活動／服務補登（${extra.length}）</h3><p class="mini">直接參與或問事補登會同步顯示在這裡，但不會擅自建立正式活動或報名名冊。</p><div class="tableScroll"><table><thead><tr><th>信眾</th><th>活動／服務</th><th>日期</th><th>來源</th><th>操作</th></tr></thead><tbody>${extra.map(r=>`<tr><td>${esc(r.personName||'未關聯')}</td><td>${esc(r.title)}</td><td>${esc(r.date||'—')}</td><td>參與補登</td><td><button class="link" onclick="go('參與紀錄')">查看原始紀錄</button></td></tr>`).join('')||'<tr><td colspan="5">沒有活動／服務補登</td></tr>'}</tbody></table></div>`;
 }
 function enhanceHome(){
  if(current!=='首頁總覽')return;
- const all=records(),counts={ritual:all.filter(x=>['儀式登記','儀式補登'].includes(x.kind)).length,activity:arr('活動管理').length+all.filter(x=>['活動報名','活動補登'].includes(x.kind)).length};
+ const all=records(),counts={ritual:all.filter(x=>['儀式登記','儀式補登'].includes(x.kind)).length,activity:arr('活動管理').filter(r=>r._calendarType!=='consultation').length+all.filter(x=>['活動報名','活動補登'].includes(x.kind)).length};
  const cards=document.querySelectorAll('#content .stats .stat');
  if(cards[2]){cards[2].querySelector('.num').textContent=counts.ritual;cards[2].querySelector('.label').textContent='儀式登記／補登';cards[2].onclick=()=>go('儀式管理')}
  if(cards[3]){cards[3].querySelector('.num').textContent=counts.activity;cards[3].querySelector('.label').textContent='活動／參與紀錄';cards[3].onclick=()=>go('活動管理')}
@@ -791,6 +824,94 @@ const originalHome=home;home=function(){originalHome();enhanceHome()};
 if(typeof showPerson==='function')showPerson=function(pid){sanxunProfile(pid)};
 window.sanxunUnified={records,forPerson,totals};window.sanxunLedgerVersion='2026-11-02-unified-v4';
 if(current==='首頁總覽')home();
+})();
+</script>
+<style id="sx-consultation-style">
+.calendar-event.consultation-event{background:#fff0b3!important;color:#745000!important;border-left:4px solid #e1a700!important}
+.sx-book-btn{background:#dcaa13!important;color:#24200c!important;font-weight:800}
+.sx-book-btn:hover{background:#efc43d!important}
+.sx-book-modal{position:fixed;inset:0;background:#122c38a8;z-index:100002;display:flex;align-items:center;justify-content:center;padding:12px}
+.sx-book-dialog{background:#fff;border-radius:18px;padding:22px;width:min(640px,100%);max-height:92vh;overflow:auto;box-shadow:0 20px 50px #0003}
+.sx-book-dialog h2{margin:0 0 14px}.sx-book-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.sx-book-grid label{font-size:13px;font-weight:700;color:#345666;display:block}
+.sx-book-grid input,.sx-book-grid select,.sx-book-grid textarea{margin-top:5px;width:100%;padding:10px;border-radius:9px;border:1px solid #cadbd8;background:white;font:inherit}
+.sx-book-grid .sx-wide{grid-column:1/-1}.sx-book-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px}
+@media(max-width:600px){.sx-book-grid{grid-template-columns:1fr}.sx-book-dialog{padding:16px}.sx-book-grid .sx-wide{grid-column:auto}}
+</style>
+<script id="sx-consultation-booking">
+(function(){
+'use strict';
+const TYPE='consultation';
+const records=()=>Array.isArray(db?.['活動管理'])?db['活動管理']:[];
+const people=()=>Array.isArray(db?.['信眾管理'])?db['信眾管理']:[];
+const safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const byId=id=>records().find(r=>String(r._id)===String(id)&&r._calendarType===TYPE);
+function currentDay(){const now=new Date();return window.sanxunBookingDate||`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`}
+function close(){document.getElementById('sx-booking-overlay')?.remove()}
+window.sanxunCloseBooking=close;
+window.sanxunOpenBooking=function(id=''){
+ const record=id?byId(id):null;
+ if(id&&!record){alert('找不到這筆問事預約，請重新整理後再試');return}
+ close();
+ const b=record?record._booking||{}:{};
+ const personOpts=people().map(p=>`<option value="${safe(p._id)}" ${String(b.personId||'')===String(p._id)?'selected':''}>${safe(p['姓名']||'未命名信眾')}</option>`).join('');
+ const date=record?.['活動日期']||currentDay();
+ const overlay=document.createElement('div');overlay.className='sx-book-modal';overlay.id='sx-booking-overlay';
+ overlay.innerHTML=`<div class="sx-book-dialog" role="dialog" aria-modal="true" aria-label="問事預約"><h2>🟡 ${record?'編輯':'新增'}問事預約</h2><p class="muted" style="font-size:13px">預約屬於行程安排，不會自動登記已完成參與或收款。</p><form id="sx-book-form"><div class="sx-book-grid">
+ <label>預約日期 *<input name="date" type="date" required value="${safe(date)}"></label>
+ <label>預約時間 *<input name="time" type="time" required value="${safe(record?.['活動時間']||'09:00')}"></label>
+ <label>選擇既有信眾<select name="personId" id="sx-book-person"><option value="">非既有信眾／手動輸入</option>${personOpts}</select></label>
+ <label>預約姓名 *<input name="name" maxlength="80" required value="${safe(b.name||'')}"></label>
+ <label>聯絡電話<input name="phone" type="tel" maxlength="30" value="${safe(b.phone||'')}"></label>
+ <label>問事項目<select name="subject">${['一般問事','事業','財運','感情','家庭','健康','其他'].map(v=>`<option value="${v}" ${b.subject===v?'selected':''}>${v}</option>`).join('')}</select></label>
+ <label>預約狀態<select name="status">${['已預約','已確認','已完成','已取消'].map(v=>`<option value="${v}" ${(record?.['狀態']||'已預約')===v?'selected':''}>${v}</option>`).join('')}</select></label>
+ <label>地點<input name="location" maxlength="100" value="${safe(record?.['地點']||'彰化三巡府')}"></label>
+ <label class="sx-wide">備註<textarea name="note" rows="3" maxlength="1000">${safe(b.note||'')}</textarea></label>
+ </div><div class="sx-book-actions">${record?'<button type="button" class="secondary danger" id="sx-book-delete">刪除預約</button>':''}<button type="button" class="secondary" id="sx-book-close">關閉</button><button type="submit" class="sx-book-btn primary" id="sx-book-save">儲存預約</button></div></form></div>`;
+ document.body.appendChild(overlay);
+ overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
+ overlay.querySelector('#sx-book-close').onclick=close;
+ const form=overlay.querySelector('form');
+ const idInput=form.elements.personId;
+ idInput.onchange=()=>{const p=people().find(x=>String(x._id)===idInput.value);if(p){form.elements.name.value=p['姓名']||'';form.elements.phone.value=p['電話']||''}};
+ if(record)overlay.querySelector('#sx-book-delete').onclick=async()=>{
+  if(!confirm('確定刪除此筆問事預約？刪除後不可從畫面復原。'))return;
+  if(!await cloudReady())return;
+  const at=records().findIndex(r=>r._id===record._id);if(at<0)return alert('資料已變動，請重新整理');
+  const removed=records().splice(at,1)[0];if(!persist()){records().splice(at,0,removed);return}
+  close();sanxunCalendar();
+ };
+ form.onsubmit=async e=>{
+  e.preventDefault();const fd=new FormData(form);const v=Object.fromEntries(fd.entries());
+  v.name=String(v.name||'').trim();v.phone=String(v.phone||'').trim();v.note=String(v.note||'').trim();
+  if(!v.name||!v.date||!v.time)return alert('請填寫日期、時間與預約姓名');
+  const collision=records().find(r=>r._calendarType===TYPE&&r._id!==record?._id&&r['活動日期']===v.date&&r['活動時間']===v.time&&r['狀態']!=='已取消'&&v.status!=='已取消');
+  if(collision&&!confirm(`同一天 ${v.time} 已有其他問事預約，確定仍要重複安排？`))return;
+  if(!await cloudReady())return;
+  const person=people().find(p=>String(p._id)===String(v.personId));
+  const before=record?structuredClone(record):null;
+  const target=record||{_id:newId(),_calendarType:TYPE};
+  Object.assign(target,{'活動名稱':'問事預約｜'+v.name,'活動日期':v.date,'活動時間':v.time,'地點':v.location||'彰化三巡府','狀態':v.status,'活動費用':'','報名人數':'','活動紀錄':'問事預約','_calendarType':TYPE,'_booking':{personId:person?._id||'',name:v.name,phone:v.phone,subject:v.subject||'一般問事',note:v.note}});
+  if(!record)records().push(target);
+  if(!persist()){
+   if(record)Object.keys(target).forEach(k=>delete target[k]),Object.assign(target,before);
+   else records().splice(records().indexOf(target),1);
+   return;
+  }
+  close();window.sanxunBookingDate=v.date;
+  if(typeof sanxunCalendar==='function')sanxunCalendar();
+  alert('問事預約已儲存。本機已更新，請到「宮務行政 → 系統設定」確認雲端同步成功。');
+ };
+};
+async function cloudReady(){
+ try{
+  const [sync,me]=await Promise.all([fetch('/api/sync',{credentials:'same-origin',cache:'no-store'}),fetch('/api/me',{credentials:'same-origin',cache:'no-store'})]);
+  if(!sync.ok||!me.ok)throw Error('登入或雲端連線失敗');
+  const data=await sync.json(),user=(await me.json()).user;
+  if(!data.initialized)throw Error('雲端尚未初始化，為避免只存在本機，已停止儲存');
+  if(!user?.admin&&!user?.permissions?.includes('活動管理'))throw Error('此帳號缺少活動管理權限，無法儲存問事預約');
+  return true;
+ }catch(e){alert('無法安全儲存：'+e.message+'。請先檢查系統設定的同步狀態。');return false}
+}
 })();
 </script>
 </body></html>
