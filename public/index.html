@@ -85,7 +85,7 @@ function modulePage(name){let d=sample[name];document.getElementById('content').
 /* Local-only editable demo. No real user information should be entered. */
 const storageKey='sanxun-demo-editable-v1';
 const fieldMap={
-'信眾管理':['姓名','宮廟職位','性別','電話','地址','國曆生日','農曆生日','出生時辰','家庭成員','介紹人','備註'],
+'信眾管理':['姓名','宮廟職位','性別','電話','地址','國曆生日','農曆生日','出生時辰','家庭成員','介紹人','入廟日期','備註'],
 '功德箱管理':['捐款日期','捐款人','捐款項目','金額','收據編號','備註'],
 '關懷追蹤':['信眾','上次聯繫','關懷內容','下次提醒','負責人','狀態'],
 '活動管理':['活動名稱','活動日期','活動時間','地點','報名人數','活動費用','狀態','照片影片連結','活動紀錄'],
@@ -1062,12 +1062,12 @@ html,body{max-width:100%;overflow-x:hidden}
    const pageRows=people.slice((pageNumber-1)*PAGE_SIZE,pageNumber*PAGE_SIZE);
    directory.replaceChildren();
    const header=document.createElement('div');header.className='sx-person-row sx-person-header';
-   for(const text of ['姓名','電話','生日','操作']){const el=document.createElement('span');el.textContent=text;header.appendChild(el)}directory.appendChild(header);
+   for(const text of ['姓名','電話','生日','入廟日期','操作']){const el=document.createElement('span');el.textContent=text;header.appendChild(el)}directory.appendChild(header);
    function field(cls,txt){const el=document.createElement('div');el.className=cls;el.textContent=String(txt??'—')||'—';return el}
    for(const person of pageRows){
      const row=document.createElement('div');row.className='sx-person-row sx-person-entry';
      const b=String(person['國曆生日']||'').trim();const birthday=/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(b)?b.replace(/^\d{4}[-/]/,''):b||'—';
-     row.append(field('sx-person-name',person['姓名']||'—'),field('sx-person-phone',person['電話']||'—'),field('sx-person-birthday',birthday));
+     row.append(field('sx-person-name',person['姓名']||'—'),field('sx-person-phone',person['電話']||'—'),field('sx-person-birthday',birthday),field('sx-person-join-date',person['入廟日期']||'—'));
      const actions=document.createElement('div');actions.className='sx-person-actions';
      function add(label,cls,fn){const btn=document.createElement('button');btn.type='button';btn.className=cls;btn.textContent=label;btn.onclick=fn;actions.appendChild(btn)}
      add('查看詳情','sx-person-primary',()=>window.sanxunProfile(person._id));
@@ -1132,4 +1132,41 @@ html,body{max-width:100%;overflow-x:hidden}
  if(isRoster())createDirectory();
 })();
 </script>
+
+<style id="sx-join-date-compact-layout-v1">
+/* Five content-sized columns. Avoid distributing huge empty space between name / phone / birthday. */
+#content #sx-people-directory {
+  width:100%!important; max-width:820px!important; margin-left:0!important;
+  overflow:visible!important; font-variant-numeric:tabular-nums;
+}
+#content #sx-people-directory .sx-person-row {
+  display:grid!important;
+  grid-template-columns:126px 148px 92px 135px minmax(210px,1fr)!important;
+  column-gap:10px!important; row-gap:8px!important;
+  padding:11px 12px!important; width:100%!important;
+  min-height:54px!important; align-items:center!important;
+}
+#content #sx-people-directory .sx-person-header {min-height:42px!important}
+#content #sx-people-directory .sx-person-row>div,
+#content #sx-people-directory .sx-person-row>span {overflow-wrap:normal!important;word-break:normal!important}
+#content #sx-people-directory .sx-person-phone {white-space:nowrap}
+#content #sx-people-directory .sx-person-join-date {white-space:nowrap}
+#content #sx-people-directory .sx-person-actions {flex-wrap:nowrap!important;gap:5px!important}
+#content #sx-people-directory .sx-person-actions button {padding:7px 9px!important;font-size:12px!important}
+@media(max-width:1080px){
+ #content #sx-people-directory {max-width:100%!important}
+ #content #sx-people-directory .sx-person-header {display:none!important}
+ #content #sx-people-directory .sx-person-row.sx-person-entry {
+   grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+   gap:10px 14px!important;
+   padding:14px!important;
+   border:1px solid #dfe9e7!important; border-radius:13px!important; margin-bottom:12px!important;
+ }
+ #content #sx-people-directory .sx-person-name {grid-column:1/-1!important;font-size:17px!important}
+ #content #sx-people-directory .sx-person-phone::before {content:'電話';display:block;color:#82949a;font-size:11px}
+ #content #sx-people-directory .sx-person-birthday::before {content:'生日';display:block;color:#82949a;font-size:11px}
+ #content #sx-people-directory .sx-person-join-date::before {content:'入廟日期';display:block;color:#82949a;font-size:11px}
+ #content #sx-people-directory .sx-person-actions {grid-column:1/-1!important;flex-wrap:wrap!important}
+}
+</style>
 </body></html>
