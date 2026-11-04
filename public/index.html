@@ -1375,4 +1375,100 @@ html,body{max-width:100%;overflow-x:hidden}
  else setTimeout(restore,50);
 })();
 </script>
+<script id="sx-family-atomic-save-v4">
+/* Single-transaction browser state update: prevent older chained onsubmit handlers
+   from persisting before the relation data has been attached. Uses existing
+   persist() cloud adapter; does not overwrite the server outside that adapter. */
+(function(){
+ 'use strict';
+ const list=()=>Array.isArray(db['信眾管理'])?db['信眾管理']:[];
+ const person=id=>list().find(p=>String(p._id)===String(id));
+ const inverse={'配偶':'配偶','父母':'子女','子女':'父母','兄弟姊妹':'兄弟姊妹','祖父母':'孫子女','孫子女':'祖父母','其他親屬':'其他親屬','其他':'其他'};
+ const priorOpen=openEditor;
+ openEditor=function(name,id){
+   const answer=priorOpen.apply(this,arguments);
+   if(name!=='信眾管理')return answer;
+   const form=document.getElementById('recordForm');
+   const select=document.getElementById('familyTarget');
+   const typeSelect=document.getElementById('familyType');
+   if(!form||!select||!typeSelect)return answer;
+   const original=person(id);
+   const pending=(Array.isArray(original?._relations)?original._relations:[])
+      .filter(r=>person(r.id)&&String(r.id)!==String(id))
+      .map(r=>({id:String(r.id),type:String(r.type||'其他')}));
+   const add=document.getElementById('familyAdd');
+   // Mirror additions and removals without changing the existing editor display.
+   if(add)add.addEventListener('click',()=>{
+     const target=String(select.value||'');
+     if(!target||!person(target)||String(id)===target||pending.some(r=>r.id===target))return;
+     pending.push({id:target,type:typeSelect.value||'其他'});
+   },true);
+   const chosen=document.getElementById('familySelected');
+   if(chosen)chosen.addEventListener('click',event=>{
+     const b=event.target.closest('[data-remove]');
+     if(!b)return;
+     const i=Number(b.dataset.remove);
+     if(Number.isInteger(i)&&i>=0&&i<pending.length)pending.splice(i,1);
+   },true);
+   // Capture submit before old form.onsubmit handlers. The old handlers save two
+   // different snapshots, which can leave cloud revision/payload out of sync.
+   form.addEventListener('submit',function(event){
+     event.preventDefault();
+     event.stopImmediatePropagation();
+     const candidate=String(select.value||'');
+     if(candidate&&person(candidate)&&candidate!==String(id)&&!pending.some(r=>r.id===candidate)){
+       pending.push({id:candidate,type:String(typeSelect.value||'其他')});
+     }
+     const fd=new FormData(form);
+     const fields=fieldMap['信眾管理'];
+     const record=original?{...original}:{_id:newId()};
+     for(let i=0;i<fields.length;i++){
+       const k=fields[i];
+       record[k]=k==='宮廟職位'
+         ? [...fd.getAll('roleChoice'),...String(fd.get('roleOther')||'').split(/[、,，]/).map(x=>x.trim()).filter(Boolean)].join('、')
+         : String(fd.get('f'+i)||'').trim();
+     }
+     if(!record['姓名']){alert('請填寫信眾姓名');return}
+     const introducers=list().filter(p=>String(p._id)!==String(record._id)&&p['姓名']===record['介紹人']);
+     record._介紹人ID=introducers.length===1?introducers[0]._id:'';
+     const dedup=[];const ids=new Set();
+     for(const r of pending){
+       if(!person(r.id)||String(r.id)===String(record._id)||ids.has(String(r.id)))continue;
+       ids.add(String(r.id));dedup.push({id:String(r.id),type:String(r.type||'其他')});
+     }
+     record._relations=dedup;
+     // Create one coherent state containing both directions BEFORE persist().
+     const originalRows=list();
+     const nextRows=originalRows.map(p=>({...p,_relations:Array.isArray(p._relations)?p._relations.map(r=>({...r})):[]}));
+     const idx=nextRows.findIndex(p=>String(p._id)===String(record._id));
+     if(idx>=0)nextRows[idx]=record;
+     else nextRows.unshift(record);
+     for(const other of nextRows){
+       if(String(other._id)===String(record._id))continue;
+       other._relations=(other._relations||[]).filter(r=>String(r.id)!==String(record._id));
+       const connected=dedup.find(r=>r.id===String(other._id));
+       if(connected)other._relations.push({id:String(record._id),type:inverse[connected.type]||'其他'});
+     }
+     db['信眾管理']=nextRows;
+     if(!persist()){
+       db['信眾管理']=originalRows;
+       alert('本機儲存失敗，原資料未修改。請先檢查瀏覽器儲存空間。');
+       return;
+     }
+     const stored=person(record._id);
+     const verified=stored&&dedup.every(r=>stored._relations.some(x=>String(x.id)===r.id));
+     if(!verified){alert('家庭關係儲存檢查未通過，請停止修改並備份資料。');return}
+     document.getElementById('editOverlay')?.remove();
+     try{window.sanxunProfile?.(record._id)}catch(e){console.warn('個人詳情重繪失敗',e);go('信眾管理')}
+     // Alert only when there is a real sync warning; local success ≠ cloud success.
+     const st=document.getElementById('temple-sync-box');
+     if(st&&/失敗|衝突|尚未|錯誤|⚠/.test(st.textContent||'')){
+       alert('家庭關係已存到目前瀏覽器，但雲端同步有異常。請下載本機備份，暫停跨裝置編輯。');
+     }
+   },true);
+   return answer;
+ };
+ window.openEditor=openEditor;
+})();
+</script>
 </body></html>
