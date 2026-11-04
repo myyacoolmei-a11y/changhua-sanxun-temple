@@ -1169,4 +1169,60 @@ html,body{max-width:100%;overflow-x:hidden}
  #content #sx-people-directory .sx-person-actions {grid-column:1/-1!important;flex-wrap:wrap!important}
 }
 </style>
+<style id="sx-profile-basic-restored">
+#content .sx-profile-basic{background:#fff;border:1px solid #dfeae7;border-radius:18px;padding:22px 24px;margin:15px 0 20px;box-shadow:0 2px 10px #1233}
+#content .sx-profile-basic-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+#content .sx-profile-basic-top h3{margin:0;font-size:19px;color:#153b49}
+#content .sx-profile-basic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px 20px}
+#content .sx-profile-basic-field{padding:7px 0;min-width:0;border-bottom:1px solid #f0f3f3}
+#content .sx-profile-basic-field .sx-field-label{display:block;color:#7a9299;font-size:12px;margin-bottom:6px}
+#content .sx-profile-basic-field .sx-field-value{font-size:14px;color:#193d4a;font-weight:600;overflow-wrap:anywhere;white-space:normal}
+#content .sx-profile-basic-field.sx-wide{grid-column:span 2}
+#content .sx-profile-basic-note{color:#6e868e;font-size:12px;margin:13px 0 0}
+@media(max-width:900px){#content .sx-profile-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#content .sx-profile-basic-field.sx-wide{grid-column:span 2}}
+@media(max-width:520px){#content .sx-profile-basic{padding:16px}#content .sx-profile-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 13px}#content .sx-profile-basic-field.sx-wide{grid-column:1/-1}}
+</style>
+<script id="sx-profile-basic-restored-script">
+(function(){
+ 'use strict';
+ const original=window.sanxunProfile;
+ if(typeof original!=='function')return;
+ const fields=[
+  ['姓名',['姓名']],['性別',['性別']],['電話',['電話']],
+  ['國曆生日',['國曆生日']],['農曆生日',['農曆生日']],['出生時辰',['出生時辰']],
+  ['地址',['地址','住址'],'wide'],['入廟日期',['入廟日期','加入日期','加入本宮信仰日期']],
+  ['宮廟職位',['宮廟職位']],['介紹人',['介紹人']],
+  ['家庭成員',['家庭成員','家庭關係'],'wide'],['備註',['備註'],'wide']
+ ];
+ const val=(obj,keys)=>{for(const k of keys){if(obj[k]!==undefined&&obj[k]!==null&&String(obj[k]).trim()!=='')return String(obj[k])}return '—'};
+ function showDetails(id){
+  const person=(db['信眾管理']||[]).find(p=>String(p._id)===String(id));
+  const content=document.getElementById('content');
+  if(!person||!content||!content.querySelector('.moduleHead'))return;
+  content.querySelector('.sx-profile-basic')?.remove();
+  const section=document.createElement('section');section.className='sx-profile-basic';
+  const header=document.createElement('div');header.className='sx-profile-basic-top';
+  const h=document.createElement('h3');h.textContent='信眾基本資料';header.appendChild(h);
+  const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='✎ 編輯基本資料';
+  edit.addEventListener('click',()=>{if(typeof openEditor==='function')openEditor('信眾管理',person._id)});
+  header.appendChild(edit);section.appendChild(header);
+  const grid=document.createElement('div');grid.className='sx-profile-basic-grid';
+  for(const [label,keys,wide] of fields){
+   const field=document.createElement('div');field.className='sx-profile-basic-field'+(wide?' sx-wide':'');
+   const title=document.createElement('span');title.className='sx-field-label';title.textContent=label;
+   const value=document.createElement('span');value.className='sx-field-value';value.textContent=val(person,keys);
+   field.append(title,value);grid.appendChild(field);
+  }
+  section.appendChild(grid);
+  const help=document.createElement('p');help.className='sx-profile-basic-note';help.textContent='尚未登錄的欄位會顯示「—」，不會自動更動既有信眾資料。';section.appendChild(help);
+  // Existing referrer panel remains below basic data; history filters and summaries stay intact.
+  content.querySelector('.moduleHead').insertAdjacentElement('afterend',section);
+ }
+ window.sanxunProfile=function(id,tab){
+  const result=original.apply(this,arguments);
+  showDetails(id);
+  return result;
+ };
+})();
+</script>
 </body></html>
