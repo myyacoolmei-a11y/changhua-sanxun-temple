@@ -1282,4 +1282,97 @@ html,body{max-width:100%;overflow-x:hidden}
  }
 })();
 </script>
+
+<script id="sx-family-save-and-route-v3">
+/* 2026-11-04: Save relationship selections, then preserve navigation across reloads.
+ * Session storage keeps only module name and record ID (not personal details).
+ * Does not initialize or overwrite the server-side snapshot. */
+(function(){
+ 'use strict';
+ const NAV_KEY='sanxun-active-view-v3';
+ const roster=()=>Array.isArray(db?.['信眾管理'])?db['信眾管理']:[];
+ const getPerson=id=>roster().find(p=>String(p._id)===String(id));
+ let inRestore=false;
+ let activePersonId=null;
+ function allowedModule(name){return Array.isArray(modules)&&modules.some(m=>m[0]===name)}
+ function writeView(view){try{sessionStorage.setItem(NAV_KEY,JSON.stringify(view))}catch(e){console.warn('無法保存頁面位置',e)}}
+ function readView(){try{return JSON.parse(sessionStorage.getItem(NAV_KEY)||'null')}catch{return null}}
+ // Remember the user's actual page selection. The original app defaults to home on reload.
+ const previousGo=go;
+ go=function(name){
+   const result=previousGo.apply(this,arguments);
+   if(!inRestore&&allowedModule(name)&&current===name){
+     activePersonId=null;
+     writeView({kind:'module',name:name});
+   }
+   return result;
+ };
+ window.go=go;
+ if(typeof window.sanxunProfile==='function'){
+   const previousProfile=window.sanxunProfile;
+   window.sanxunProfile=function(id,tab){
+     const result=previousProfile.apply(this,arguments);
+     if(getPerson(id)){
+       activePersonId=String(id);
+       if(!inRestore)writeView({kind:'person',id:String(id),tab:String(tab||'全部歷史')});
+     }
+     return result;
+   };
+ }
+ // The existing family editor stores an in-memory pending list. Selecting a person
+ // but skipping '+ 加入' previously saved nothing. Make the selected choice count.
+ const previousEditor=openEditor;
+ openEditor=function(name,id){
+   const returnToPerson=name==='信眾管理'&&activePersonId!==null&&String(activePersonId)===String(id);
+   const result=previousEditor.apply(this,arguments);
+   if(name!=='信眾管理')return result;
+   const form=document.getElementById('recordForm');
+   if(!form||typeof form.onsubmit!=='function')return result;
+   const existingSubmit=form.onsubmit;
+   form.onsubmit=function(event){
+     const select=document.getElementById('familyTarget');
+     const add=document.getElementById('familyAdd');
+     // Only add once; the original editor already prevents duplicate links.
+     if(select?.value && add){
+       const chosen=String(select.value);
+       const person=getPerson(id);
+       const present=Array.isArray(person?._relations)&&person._relations.some(x=>String(x.id)===chosen);
+       const selectedText=document.getElementById('familySelected')?.textContent||'';
+       const label=getPerson(chosen)?.['姓名']||'';
+       if(!present && (!label || !selectedText.includes(label)))add.click();
+     }
+     const oldIds=new Set(roster().map(p=>String(p._id)));
+     const result=existingSubmit.call(this,event);
+     const saved=id?getPerson(id):roster().find(p=>!oldIds.has(String(p._id)));
+     // Original submit closes the editor and writes data to the existing persist/sync adapter.
+     if(saved&&returnToPerson&&!document.getElementById('editOverlay')){
+       queueMicrotask(()=>window.sanxunProfile?.(saved._id));
+     }
+     return result;
+   };
+   return result;
+ };
+ window.openEditor=openEditor;
+ // Do not intercept public registration or login URLs.
+ function restore(){
+   if(new URLSearchParams(location.search).has('register'))return;
+   const view=readView();
+   if(!view)return;
+   inRestore=true;
+   try{
+     if(view.kind==='person'&&getPerson(view.id)){
+       go('信眾管理');
+       window.sanxunProfile?.(view.id,view.tab||'全部歷史');
+     }else if(view.kind==='module'&&allowedModule(view.name)){
+       go(view.name);
+     }
+   }catch(e){console.warn('還原頁面位置失敗',e)}
+   finally{inRestore=false}
+ }
+ // Defer until app's normal initial home render has run. Subsequent sync updates
+ // may redraw the module, but the navigation selection stays in sessionStorage.
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(restore,50),{once:true});
+ else setTimeout(restore,50);
+})();
+</script>
 </body></html>
