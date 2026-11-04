@@ -975,85 +975,114 @@ async function cloudReady(){
  #content .sx-roster-table .sx-actions{display:flex;gap:7px}
 }
 </style>
-<script id="sx-final-roster-referrer-and-calendar-links">
+
+<style id="sx-roster-grid-20261102">
+/* Independent directory layout: no inherited table widths or sideways scrolling. */
+#content .datawrap:has(#sx-people-directory){min-width:0!important;max-width:100%!important;overflow:visible!important}
+#content .tableScroll:has(#sx-people-directory){min-width:0!important;max-width:100%!important;overflow:visible!important}
+#sx-people-directory{width:100%;min-width:0;max-width:100%;font-size:14px;color:#294b58}
+#sx-people-directory .sx-person-row{display:grid!important;grid-template-columns:minmax(130px,1.2fr) minmax(120px,1.1fr) minmax(95px,.8fr) minmax(225px,1.5fr);gap:14px;align-items:center;min-width:0;width:100%;padding:14px 16px;border-bottom:1px solid #e8eeec}
+#sx-people-directory .sx-person-header{background:#f5f8f7;color:#58717a;font-size:13px;font-weight:700;border-radius:9px 9px 0 0}
+#sx-people-directory .sx-person-row>div{min-width:0;overflow-wrap:anywhere}
+#sx-people-directory .sx-person-name{font-weight:750;color:#183c4b}
+#sx-people-directory .sx-person-actions{display:flex;justify-content:flex-start;flex-wrap:wrap;align-items:center;gap:6px}
+#sx-people-directory button{white-space:nowrap!important;border-radius:8px;padding:8px 11px;font-size:12px;line-height:1.3;font-weight:650}
+#sx-people-directory .sx-person-primary{background:#087f7a;color:#fff;border:1px solid #087f7a}
+#sx-people-directory .sx-person-secondary{background:#fff;color:#087f7a;border:1px solid #c9e0dc}
+#sx-people-directory .sx-person-danger{background:#fff;color:#ba4d51;border:1px solid #efd0d0}
+#sx-people-directory .sx-person-empty{padding:24px;text-align:center;color:#7b9198}
+@media(max-width:900px){
+ #sx-people-directory .sx-person-header{display:none!important}
+ #sx-people-directory .sx-person-row.sx-person-entry{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px 12px;margin:0 0 12px;border:1px solid #dfe9e7;border-radius:13px;padding:15px;background:white;box-shadow:0 2px 10px #183b4b08}
+ #sx-people-directory .sx-person-name{grid-column:1/-1;font-size:17px}
+ #sx-people-directory .sx-person-phone::before{content:'電話';display:block;color:#83979c;font-size:11px;margin-bottom:4px}
+ #sx-people-directory .sx-person-birthday::before{content:'生日';display:block;color:#83979c;font-size:11px;margin-bottom:4px}
+ #sx-people-directory .sx-person-actions{grid-column:1/-1;margin-top:3px}
+}
+@media(max-width:420px){#sx-people-directory .sx-person-actions button{padding:8px 9px;font-size:11px}}
+</style>
+<style id="sx-fix-roster-20261104">
+html,body{max-width:100%;overflow-x:hidden}
+#content .datawrap:has(#sx-people-directory){min-width:0!important;max-width:100%!important;overflow:visible!important}
+#content .tableScroll:has(#sx-people-directory){min-width:0!important;max-width:100%!important;overflow:visible!important}
+#content #sx-people-directory{display:block;width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden}
+#sx-people-directory .sx-person-row{display:grid!important;grid-template-columns:minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.75fr) minmax(0,1.75fr)!important;gap:12px!important;width:100%!important;min-width:0!important;align-items:center!important;padding:13px 12px!important}
+#sx-people-directory .sx-person-row>div,#sx-people-directory .sx-person-row>span{min-width:0!important;max-width:100%;overflow-wrap:anywhere;word-break:normal}
+#sx-people-directory .sx-person-actions{display:flex!important;gap:5px!important;align-items:center!important;justify-content:flex-start!important;flex-wrap:wrap!important;min-width:0!important}
+#sx-people-directory .sx-person-actions button{flex:0 0 auto!important;white-space:nowrap!important;padding:7px 9px!important;line-height:1.4!important}
+@media(max-width:1000px){#sx-people-directory .sx-person-header{display:none!important}#sx-people-directory .sx-person-row.sx-person-entry{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important;padding:15px!important;margin:0 0 12px!important;border:1px solid #dfe9e7!important;border-radius:13px!important}#sx-people-directory .sx-person-name{grid-column:1/-1!important;font-size:17px!important}#sx-people-directory .sx-person-actions{grid-column:1/-1!important}#sx-people-directory .sx-person-phone::before{content:'電話';display:block;color:#82949a;font-size:11px}#sx-people-directory .sx-person-birthday::before{content:'生日';display:block;color:#82949a;font-size:11px}}
+</style>
+<script id="sx-roster-stable-20261104">
 (function(){
  'use strict';
- // This must run after all legacy table decorators: one concise roster renderer is authoritative.
- function peopleView(){
-   if(typeof db==='undefined'||!Array.isArray(db['信眾管理']))return;
-   const table=document.querySelector('#rows')?.closest('table');
-   if(!table || current!=='信眾管理' || (typeof rosterTab!=='undefined'&&rosterTab!=='信眾資料'))return;
-   table.className='sx-roster-table';
-   const q=(document.getElementById('filter')?.value||'').toLocaleLowerCase('zh-Hant').trim();
-   const people=db['信眾管理'].filter(p=>Object.values(p).some(v=>typeof v==='string'&&v.toLocaleLowerCase('zh-Hant').includes(q)));
-   const thead=table.querySelector('thead');
-   if(thead)thead.innerHTML='<tr><th>姓名</th><th>電話</th><th>生日</th><th>操作</th></tr>';
-   const body=table.querySelector('#rows');
-   body.innerHTML=people.map(p=>{
-     const pid=JSON.stringify(String(p._id)).replace(/"/g,'&quot;');
-     const d=String(p['國曆生日']||'');const nice=d?/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(d)?d.replace(/^\d{4}[-/]/,''):d:'—';
-     return '<tr><td data-label="姓名"><b>'+esc(p['姓名']||'—')+'</b></td><td data-label="電話">'+esc(p['電話']||'—')+'</td><td data-label="生日">'+esc(nice)+'</td><td data-label="操作"><div class="sx-actions"><button class="sx-detail" onclick="sanxunProfile('+pid+')">查看詳情</button><button class="secondary tiny" onclick="openEditor(\'信眾管理\','+pid+')">編輯</button><button class="secondary tiny danger" onclick="deleteRecord(\'信眾管理\','+pid+')">刪除</button></div></td></tr>';
-   }).join('')||'<tr><td colspan="4">沒有符合的信眾資料</td></tr>';
-   const count=document.getElementById('count');if(count)count.textContent='共 '+people.length+' 筆信眾';
+ // Use ONE authoritative directory view. Keep original table in DOM for legacy code, but hidden.
+ function isRoster(){return typeof current!=='undefined'&&current==='信眾管理'}
+ function createDirectory(){
+   if(!isRoster()||typeof db==='undefined'||!Array.isArray(db['信眾管理']))return;
+   const rows=document.getElementById('rows');const table=rows?.closest('table');
+   if(!table)return;
+   table.style.setProperty('display','none','important');table.setAttribute('aria-hidden','true');
+   const tableWrap=table.closest('.tableScroll');
+   if(tableWrap){tableWrap.style.setProperty('min-width','0','important');tableWrap.style.setProperty('overflow','visible','important')}
+   let directory=document.getElementById('sx-people-directory');
+   if(!directory){directory=document.createElement('div');directory.id='sx-people-directory';table.insertAdjacentElement('afterend',directory)}
+   const search=(document.getElementById('filter')?.value||'').trim().toLocaleLowerCase('zh-Hant');
+   const people=db['信眾管理'].filter(person=>Object.entries(person).some(([k,v])=>!k.startsWith('_')&&typeof v==='string'&&v.toLocaleLowerCase('zh-Hant').includes(search)));
+   directory.replaceChildren();
+   const header=document.createElement('div');header.className='sx-person-row sx-person-header';
+   for(const text of ['姓名','電話','生日','操作']){const el=document.createElement('span');el.textContent=text;header.appendChild(el)}directory.appendChild(header);
+   function field(cls,txt){const el=document.createElement('div');el.className=cls;el.textContent=String(txt??'—')||'—';return el}
+   for(const person of people){
+     const row=document.createElement('div');row.className='sx-person-row sx-person-entry';
+     const b=String(person['國曆生日']||'').trim();const birthday=/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(b)?b.replace(/^\d{4}[-/]/,''):b||'—';
+     row.append(field('sx-person-name',person['姓名']||'—'),field('sx-person-phone',person['電話']||'—'),field('sx-person-birthday',birthday));
+     const actions=document.createElement('div');actions.className='sx-person-actions';
+     function add(label,cls,fn){const btn=document.createElement('button');btn.type='button';btn.className=cls;btn.textContent=label;btn.onclick=fn;actions.appendChild(btn)}
+     add('查看詳情','sx-person-primary',()=>window.sanxunProfile(person._id));
+     add('編輯','sx-person-secondary',()=>openEditor('信眾管理',person._id));
+     add('刪除','sx-person-danger',()=>deleteRecord('信眾管理',person._id));
+     row.appendChild(actions);directory.appendChild(row);
+   }
+   if(!people.length){directory.appendChild(field('sx-person-empty','目前沒有符合的信眾資料'))}
+   const counter=document.getElementById('count');if(counter)counter.textContent='共 '+people.length+' 筆信眾';
  }
- // Override legacy final renderer only for roster, leave all other business modules untouched.
- const priorRows=renderRows;
+ const oldRenderRows=renderRows;
  renderRows=function(name,q=''){
-   if(name==='信眾管理'){peopleView();return;}
-   return priorRows(name,q);
+   if(name==='信眾管理'){createDirectory();return}
+   return oldRenderRows(name,q);
  };
- const priorPage=modulePage;
- modulePage=function(name){priorPage(name);if(name==='信眾管理')peopleView()};
- const priorEditor=openEditor;
+ const oldModulePage=modulePage;
+ modulePage=function(name){oldModulePage(name);if(name==='信眾管理')createDirectory()};
+ // Introducer field: keep original form and data storage behavior.
+ const oldEditor=openEditor;
  openEditor=function(name,id){
-   priorEditor(name,id);
-   if(name!=='信眾管理')return;
+   oldEditor(name,id);if(name!=='信眾管理')return;
    const form=document.getElementById('recordForm');if(!form)return;
-   const index=fieldMap['信眾管理'].indexOf('介紹人');
-   const field=form.elements['f'+index];if(!field)return;
-   const list=document.createElement('datalist');list.id='sx-referrer-suggestions';
-   const currentRecord=id?db['信眾管理'].find(x=>x._id===id):null;
-   list.innerHTML=db['信眾管理'].filter(p=>p._id!==id).map(p=>'<option value="'+esc(p['姓名']||'')+'"></option>').join('');
-   field.setAttribute('list',list.id);field.setAttribute('placeholder','輸入介紹人姓名，或選擇現有信眾');
-   field.insertAdjacentElement('afterend',list);
-   const hint=document.createElement('small');hint.style.cssText='display:block;margin-top:5px;color:#62818a';
-   hint.textContent='若姓名唯一符合現有信眾，系統會自動連結；其他介紹人可直接輸入姓名。';
-   list.insertAdjacentElement('afterend',hint);
+   const n=fieldMap['信眾管理'].indexOf('介紹人');const input=form.elements['f'+n];if(!input)return;
+   document.getElementById('sx-referrer-suggestions')?.remove();
+   const suggestions=document.createElement('datalist');suggestions.id='sx-referrer-suggestions';
+   for(const p of db['信眾管理'].filter(p=>p._id!==id)){const opt=document.createElement('option');opt.value=p['姓名']||'';suggestions.appendChild(opt)}
+   input.setAttribute('list',suggestions.id);input.placeholder='輸入介紹人姓名或選擇現有信眾';input.after(suggestions);
  };
- const oldProfile=window.sanxunProfile;
- window.sanxunProfile=function(id,tab){
-   oldProfile(id,tab);
-   const p=db['信眾管理'].find(x=>x._id===id);if(!p)return;
-   const content=document.getElementById('content');const head=content?.querySelector('.moduleHead');if(!head)return;
-   content.querySelectorAll('.sx-referrer-panel').forEach(n=>n.remove());
-   const ref=p._介紹人ID?db['信眾管理'].find(x=>x._id===p._介紹人ID):null;
-   const name=p['介紹人']||ref?.['姓名']||'';
-   const byName=!ref && name?db['信眾管理'].filter(x=>x._id!==id&&x['姓名']===name):[];
-   const linked=ref||(byName.length===1?byName[0]:null);
-   const referred=db['信眾管理'].filter(x=>x._id!==id&&(x._介紹人ID===id||(!x._介紹人ID&&x['介紹人']===p['姓名'])));
-   const panel=document.createElement('section');panel.className='sx-referrer-panel';
-   panel.innerHTML='<h3>介紹人與推薦關係</h3><div><b>介紹人：</b>'+esc(name||'尚未設定')+(linked?' <button type="button" id="sx-referrer-view">查看介紹人檔案</button>':'')+'</div><p style="margin:12px 0 6px"><b>由此信眾介紹：</b>'+referred.length+' 人</p><div class="sx-referrer-list"></div>';
-   head.insertAdjacentElement('afterend',panel);
-   if(linked)panel.querySelector('#sx-referrer-view').onclick=()=>window.sanxunProfile(linked._id);
-   const box=panel.querySelector('.sx-referrer-list');
-   referred.forEach(other=>{const btn=document.createElement('button');btn.type='button';btn.textContent=other['姓名']||'未命名';btn.onclick=()=>window.sanxunProfile(other._id);box.appendChild(btn)});
+ const profile=window.sanxunProfile;
+ if(typeof profile==='function')window.sanxunProfile=function(id,tab){
+   profile(id,tab);const person=db['信眾管理'].find(p=>String(p._id)===String(id));if(!person)return;
+   const heading=document.querySelector('#content .moduleHead');if(!heading)return;
+   document.querySelector('#content .sx-referrer-panel')?.remove();
+   const parent=db['信眾管理'].find(p=>String(p._id)===String(person._介紹人ID||''))||null;
+   const intro=person['介紹人']||parent?.['姓名']||'尚未設定';
+   const referred=db['信眾管理'].filter(p=>String(p._id)!==String(id)&&(String(p._介紹人ID||'')===String(id)||(!p._介紹人ID&&p['介紹人']===person['姓名'])));
+   const box=document.createElement('section');box.className='sx-referrer-panel';
+   const title=document.createElement('h3');title.textContent='介紹人與推薦關係';box.appendChild(title);
+   const line=document.createElement('p');line.textContent='介紹人：'+intro;box.appendChild(line);
+   const count=document.createElement('p');count.textContent='由此信眾介紹：'+referred.length+' 人';box.appendChild(count);
+   if(parent){const button=document.createElement('button');button.textContent='查看介紹人';button.onclick=()=>window.sanxunProfile(parent._id);box.appendChild(button)}
+   heading.after(box);
  };
- // Calendar event buttons lead to the matching activity detail, not a new or duplicate activity.
- const priorCalendar=window.sanxunCalendar;
- window.sanxunCalendar=function(){
-   priorCalendar();
-   const details=document.querySelector('#content .calendar-details');if(!details)return;
-   const selected=window.sanxunBookingDate;
-   const events=db['活動管理'].filter(a=>a._calendarType!=='consultation'&&String(a['活動日期']||'').replaceAll('/','-')===selected);
-   const visible=details.querySelectorAll('.calendar-event.activity-event');
-   visible.forEach((el,i)=>{
-     const activity=events[i];if(!activity)return;
-     const btn=document.createElement('button');btn.type='button';btn.className='sx-calendar-link';btn.textContent='查看活動詳情';
-     btn.onclick=()=>{go('活動管理');if(typeof showActivity==='function')showActivity(activity._id)};
-     el.appendChild(btn);
-   });
- };
- if(current==='信眾管理')peopleView();
+ // Retain previously implemented calendar functions without changing their storage semantics.
+ const previousCalendar=window.sanxunCalendar;
+ if(typeof previousCalendar==='function')window.sanxunCalendar=function(){previousCalendar();};
+ if(isRoster())createDirectory();
 })();
 </script>
 </body></html>
