@@ -1182,47 +1182,104 @@ html,body{max-width:100%;overflow-x:hidden}
 @media(max-width:900px){#content .sx-profile-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#content .sx-profile-basic-field.sx-wide{grid-column:span 2}}
 @media(max-width:520px){#content .sx-profile-basic{padding:16px}#content .sx-profile-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 13px}#content .sx-profile-basic-field.sx-wide{grid-column:1/-1}}
 </style>
+<style id="sx-profile-family-display-v2">
+#content .sx-profile-relation-panel{margin-top:18px;padding:16px 18px;background:#f2faf8;border:1px solid #d9ebe5;border-radius:12px}
+#content .sx-profile-relation-panel h4{margin:0 0 12px;font-size:16px;color:#164554}
+#content .sx-profile-relations{display:flex;flex-wrap:wrap;gap:8px}
+#content .sx-profile-relation-item{display:flex;align-items:center;gap:10px;background:#fff;padding:8px 10px;border:1px solid #d8e7e1;border-radius:9px;font-size:13px}
+</style>
 <script id="sx-profile-basic-restored-script">
 (function(){
  'use strict';
- const original=window.sanxunProfile;
- if(typeof original!=='function')return;
+ const baseProfile=window.sanxunProfile;
+ if(typeof baseProfile!=='function')return;
+ const byId=id=>(db['信眾管理']||[]).find(p=>String(p._id)===String(id));
  const fields=[
-  ['姓名',['姓名']],['性別',['性別']],['電話',['電話']],
-  ['國曆生日',['國曆生日']],['農曆生日',['農曆生日']],['出生時辰',['出生時辰']],
-  ['地址',['地址','住址'],'wide'],['入廟日期',['入廟日期','加入日期','加入本宮信仰日期']],
-  ['宮廟職位',['宮廟職位']],['介紹人',['介紹人']],
-  ['家庭成員',['家庭成員','家庭關係'],'wide'],['備註',['備註'],'wide']
+  ['姓名','姓名'],['性別','性別'],['電話','電話'],
+  ['國曆生日','國曆生日'],['農曆生日','農曆生日'],['出生時辰','出生時辰'],
+  ['地址','地址','wide'],['入廟日期','入廟日期'],['宮廟職位','宮廟職位'],
+  ['介紹人','介紹人'],['家庭成員','家庭成員','wide'],['備註','備註','wide']
  ];
- const val=(obj,keys)=>{for(const k of keys){if(obj[k]!==undefined&&obj[k]!==null&&String(obj[k]).trim()!=='')return String(obj[k])}return '—'};
- function showDetails(id){
-  const person=(db['信眾管理']||[]).find(p=>String(p._id)===String(id));
+ let activeId=null;
+ let inRender=false;
+ const clean=x=>(x===undefined||x===null||String(x).trim()==='')?'—':String(x);
+ function appendField(parent,label,value,wide){
+  const el=document.createElement('div');el.className='sx-profile-basic-field'+(wide?' sx-wide':'');
+  const key=document.createElement('span');key.className='sx-field-label';key.textContent=label;
+  const val=document.createElement('div');val.className='sx-field-value';val.textContent=clean(value);
+  el.append(key,val);parent.append(el);
+ }
+ function relationDetails(person){
+  const raw=Array.isArray(person._relations)?person._relations:[];
+  if(!raw.length)return [];
+  return raw.map(r=>({id:r.id,type:r.type||'親屬',person:byId(r.id)}));
+ }
+ function renderProfile(){
+  if(inRender||activeId===null)return;
   const content=document.getElementById('content');
-  if(!person||!content||!content.querySelector('.moduleHead'))return;
-  content.querySelector('.sx-profile-basic')?.remove();
-  const section=document.createElement('section');section.className='sx-profile-basic';
-  const header=document.createElement('div');header.className='sx-profile-basic-top';
-  const h=document.createElement('h3');h.textContent='信眾基本資料';header.appendChild(h);
-  const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='✎ 編輯基本資料';
-  edit.addEventListener('click',()=>{if(typeof openEditor==='function')openEditor('信眾管理',person._id)});
-  header.appendChild(edit);section.appendChild(header);
-  const grid=document.createElement('div');grid.className='sx-profile-basic-grid';
-  for(const [label,keys,wide] of fields){
-   const field=document.createElement('div');field.className='sx-profile-basic-field'+(wide?' sx-wide':'');
-   const title=document.createElement('span');title.className='sx-field-label';title.textContent=label;
-   const value=document.createElement('span');value.className='sx-field-value';value.textContent=val(person,keys);
-   field.append(title,value);grid.appendChild(field);
-  }
-  section.appendChild(grid);
-  const help=document.createElement('p');help.className='sx-profile-basic-note';help.textContent='尚未登錄的欄位會顯示「—」，不會自動更動既有信眾資料。';section.appendChild(help);
-  // Existing referrer panel remains below basic data; history filters and summaries stay intact.
-  content.querySelector('.moduleHead').insertAdjacentElement('afterend',section);
+  const head=content?.querySelector('.moduleHead');
+  const person=byId(activeId);
+  // Only appear within the personal-history detail page, not directory or edit forms.
+  if(!head||!person||!head.textContent.includes('個人參與及收款歷史'))return;
+  if(content.querySelector('.sx-profile-basic[data-person-id="'+CSS.escape(String(activeId))+'"]'))return;
+  inRender=true;
+  try{
+   content.querySelectorAll('.sx-profile-basic').forEach(el=>el.remove());
+   const section=document.createElement('section');section.className='sx-profile-basic';section.dataset.personId=String(activeId);
+   const bar=document.createElement('div');bar.className='sx-profile-basic-top';
+   const title=document.createElement('h3');title.textContent='信眾基本資料';
+   const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='✎ 編輯基本資料';
+   edit.onclick=()=>openEditor('信眾管理',person._id);
+   bar.append(title,edit);section.append(bar);
+   const grid=document.createElement('div');grid.className='sx-profile-basic-grid';
+   for(const [label,key,wide] of fields){
+    let value=person[key];
+    if(key==='地址')value=person['地址']||person['住址'];
+    if(key==='入廟日期')value=person['入廟日期']||person['加入日期'];
+    if(key==='介紹人'){
+     const intro=byId(person['介紹人ID']);
+     value=intro?intro['姓名']:person['介紹人'];
+    }
+    appendField(grid,label,value,wide);
+   }
+   section.append(grid);
+   const rel=document.createElement('div');rel.className='sx-profile-relation-panel';
+   const rt=document.createElement('h4');rt.textContent='家庭關係';rel.append(rt);
+   const links=relationDetails(person);
+   if(!links.length){const e=document.createElement('p');e.className='sx-profile-basic-note';e.textContent='尚未綁定家庭關係';rel.append(e)}
+   else{
+    const list=document.createElement('div');list.className='sx-profile-relations';
+    for(const link of links){
+     const item=document.createElement('div');item.className='sx-profile-relation-item';
+     const text=document.createElement('span');text.textContent=(link.person?.['姓名']||'已移除的信眾')+'（'+link.type+'）';item.append(text);
+     if(link.person){const btn=document.createElement('button');btn.type='button';btn.className='secondary tiny';btn.textContent='查看檔案';btn.onclick=()=>window.sanxunProfile(link.id);item.append(btn)}
+     list.append(item)
+    }
+    rel.append(list)
+   }
+   section.append(rel);
+   const note=document.createElement('p');note.className='sx-profile-basic-note';note.textContent='未登錄欄位顯示「—」；家庭關係依信眾編輯頁綁定內容呈現。';section.append(note);
+   head.insertAdjacentElement('afterend',section);
+  }finally{inRender=false}
  }
  window.sanxunProfile=function(id,tab){
-  const result=original.apply(this,arguments);
-  showDetails(id);
+  activeId=String(id);
+  const result=baseProfile.apply(this,arguments);
+  renderProfile();
+  queueMicrotask(renderProfile);
   return result;
  };
+ // Legacy modules sometimes replace #content after rendering a tab: restore the profile section.
+ const target=document.getElementById('content');
+ if(target){
+  let scheduled=false;
+  new MutationObserver(()=>{
+   if(inRender||scheduled||activeId===null)return;
+   if(target.querySelector('.sx-profile-basic[data-person-id="'+CSS.escape(String(activeId))+'"]'))return;
+   if(!target.querySelector('.moduleHead')?.textContent.includes('個人參與及收款歷史'))return;
+   scheduled=true;queueMicrotask(()=>{scheduled=false;renderProfile()});
+  }).observe(target,{childList:true,subtree:true});
+ }
 })();
 </script>
 </body></html>
