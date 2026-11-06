@@ -85,13 +85,13 @@ function modulePage(name){let d=sample[name];document.getElementById('content').
 /* Local-only editable demo. No real user information should be entered. */
 const storageKey='sanxun-demo-editable-v1';
 const fieldMap={
-'信眾管理':['姓名','宮廟職位','性別','電話','地址','國曆生日','農曆生日','出生時辰','家庭成員','介紹人','入廟日期','備註'],
+'信眾管理':['姓名','宮廟職位','性別','電話','地址','國曆生日','農曆生日','出生時辰','家庭成員','介紹人','備註'],
 '功德箱管理':['捐款日期','捐款人','捐款項目','金額','收據編號','備註'],
 '關懷追蹤':['信眾','上次聯繫','關懷內容','下次提醒','負責人','狀態'],
 '活動管理':['活動名稱','活動日期','活動時間','地點','報名人數','活動費用','狀態','照片影片連結','活動紀錄'],
 '生日提醒':['信眾姓名','國曆生日','農曆生日','祝福紀錄','提醒狀態'],
 '參與紀錄':['信眾','參與日期','活動／服務','儀式項目','捐款金額','備註'],
-'財務管理':['日期','收支類型','分類','摘要','金額','經手人','備註'],
+'財務管理':['日期','收支類型','分類','摘要','金額','經手人','備註','信眾'],
 '儀式管理':['信眾','儀式項目','辦理日期','費用','狀態','備註'],
 '友宮管理':['友宮名稱','聯絡人','電話','地址','交流項目','禮金／送禮','最近參訪','活動參與','備註'],
 '宮務行政':['工作事項','負責人','期限','進度','類別','會議紀錄','組織成員','備註']};
@@ -132,7 +132,7 @@ function displayVal(k,v){return (k==='金額'||k==='費用'||k==='活動費用'|
 function newId(){return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 function renderRows(name,q=''){const fields=fieldMap[name];const filtered=db[name].filter(r=>fields.some(k=>String(r[k]||'').toLowerCase().includes(q.toLowerCase())));document.getElementById('rows').innerHTML=filtered.map(r=>`<tr>${fields.map(k=>`<td>${displayVal(k,r[k])}</td>`).join('')}<td style="white-space:nowrap"><button class="secondary tiny" onclick="openEditor('${name}','${r._id}')">編輯</button> <button class="secondary tiny danger" onclick="deleteRecord('${name}','${r._id}')">刪除</button></td></tr>`).join('')||`<tr><td colspan="${fields.length+1}" style="text-align:center;padding:35px;color:#84999e">目前沒有符合的資料</td></tr>`;document.getElementById('count').textContent=`共 ${filtered.length} 筆資料`}
 function modulePage(name){const fields=fieldMap[name];document.getElementById('content').innerHTML=`<div class="moduleHead"><div><h1>${esc(name)}</h1><p>彰化三巡府 ／ ${esc(name)} ／ 資料管理</p></div><div class="actionbar"><button class="secondary" onclick="exportCsv('${name}')">↓ 匯出 CSV</button><button class="primary" onclick="openEditor('${name}')">＋ 新增資料</button></div></div><div class="datawrap"><div class="filters"><input id="filter" placeholder="⌕ 搜尋${esc(name)}..." oninput="renderRows('${name}',this.value)"></div><div class="countNote" id="count"></div><div class="tableScroll"><table><thead><tr>${fields.map(k=>`<th>${esc(k)}</th>`).join('')}<th>操作</th></tr></thead><tbody id="rows"></tbody></table></div></div><div class="notice">可新增、編輯、刪除示範資料。登入後的資料由雲端同步功能管理；請至「宮務行政 → 系統設定」查看同步狀態，並確認備份是否成功。</div>`;renderRows(name);if(name==='財務管理'){const el=document.querySelector('#content .datawrap');if(el){const p=document.createElement('p');p.className='notice';p.textContent='新增財務時，先選收入／支出，再選客戶指定的財務分類。舊紀錄與自訂分類保留；問事預約不會自動列入收入。';el.appendChild(p)}}}
-function openEditor(name,id){const r=id?db[name].find(x=>x._id===id):null;const fields=fieldMap[name];document.getElementById('editOverlay')?.remove();let html=`<div class="modalBackdrop" id="editOverlay"><div class="modalBox"><h2>${r?'編輯':'新增'}${esc(name)}資料</h2><div class="muted" style="font-size:12px">資料將依目前帳號授權與雲端同步狀態儲存</div><form id="recordForm"><div class="formGrid">${fields.map((k,i)=>{const val=r?.[k]??(name==='財務管理'&&k==='收支類型'?'收入':'');const isLong=/備註|紀錄|關懷內容|家庭成員|地址|連結|摘要/.test(k);const opt=(name==='財務管理'&&k==='分類')?sanxunFinanceOptions(r?.['收支類型']||'收入',String(val)):choices[k];const roleField=k==='宮廟職位';const typ=/日期|生日|期限|聯繫|提醒|參訪/.test(k)&&!k.includes('農曆')?'date':/金額|費用|人數/.test(k)?'text':'text';return `<label class="field ${isLong?'wide':''}"><span>${esc(k)}</span>${roleField?`<div class="sx-role-options">${templeRoles.map(v=>`<label class="sx-role-option"><input type="checkbox" name="roleChoice" value="${esc(v)}" ${String(val).split('、').includes(v)?'checked':''}>${esc(v)}</label>`).join('')}</div><input name="roleOther" placeholder="其他職位（可自行輸入）" value="${esc(String(val).split('、').filter(v=>!templeRoles.includes(v)).join('、'))}">`:opt?`<select name="f${i}"><option value="">請選擇</option>${opt.map(v=>`<option value="${esc(v)}" ${val===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:isLong?`<textarea name="f${i}">${esc(val)}</textarea>`:`<input name="f${i}" type="${typ}" value="${esc(val)}" ${i===0?'required':''} placeholder="請輸入${esc(k)}">`}</label>`}).join('')}</div><div class="modalActions"><button type="button" class="secondary" onclick="document.getElementById('editOverlay').remove()">取消</button><button class="primary" type="submit">儲存資料</button></div></form></div></div>`;document.body.insertAdjacentHTML('beforeend',html);
+function openEditor(name,id){const r=id?db[name].find(x=>x._id===id):null;const fields=fieldMap[name];document.getElementById('editOverlay')?.remove();let html=`<div class="modalBackdrop" id="editOverlay"><div class="modalBox"><h2>${r?'編輯':'新增'}${esc(name)}資料</h2><div class="muted" style="font-size:12px">資料將依目前帳號授權與雲端同步狀態儲存</div><form id="recordForm"><div class="formGrid">${fields.map((k,i)=>{const val=r?.[k]??(name==='財務管理'&&k==='收支類型'?'收入':'');const isLong=/備註|紀錄|關懷內容|家庭成員|地址|連結|摘要/.test(k);const opt=(name==='財務管理'&&k==='分類')?sanxunFinanceOptions(r?.['收支類型']||'收入',String(val)):(name==='財務管理'&&k==='信眾')?[...new Set((db['信眾管理']||[]).map(p=>String(p['姓名']||'').trim()).filter(Boolean)),...(val&&!((db['信眾管理']||[]).some(p=>p['姓名']===val))?[val]:[])]:choices[k];const roleField=k==='宮廟職位';const typ=/日期|生日|期限|聯繫|提醒|參訪/.test(k)&&!k.includes('農曆')?'date':/金額|費用|人數/.test(k)?'text':'text';return `<label class="field ${isLong?'wide':''}"><span>${esc(k)}</span>${roleField?`<div class="sx-role-options">${templeRoles.map(v=>`<label class="sx-role-option"><input type="checkbox" name="roleChoice" value="${esc(v)}" ${String(val).split('、').includes(v)?'checked':''}>${esc(v)}</label>`).join('')}</div><input name="roleOther" placeholder="其他職位（可自行輸入）" value="${esc(String(val).split('、').filter(v=>!templeRoles.includes(v)).join('、'))}">`:opt?`<select name="f${i}"><option value="">請選擇</option>${opt.map(v=>`<option value="${esc(v)}" ${val===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`:isLong?`<textarea name="f${i}">${esc(val)}</textarea>`:`<input name="f${i}" type="${typ}" value="${esc(val)}" ${i===0?'required':''} placeholder="請輸入${esc(k)}">`}</label>`}).join('')}</div><div class="modalActions"><button type="button" class="secondary" onclick="document.getElementById('editOverlay').remove()">取消</button><button class="primary" type="submit">儲存資料</button></div></form></div></div>`;document.body.insertAdjacentHTML('beforeend',html);
 if(name==='財務管理'){
  const form=document.getElementById('recordForm');
  const idx=fieldMap['財務管理'].indexOf('收支類型');
@@ -140,7 +140,7 @@ if(name==='財務管理'){
  sanxunFinanceRefreshCategory(form,String(r?.['分類']||''));
  typeSelect?.addEventListener('change',()=>{const category=form.elements['f'+fieldMap['財務管理'].indexOf('分類')];if(category)category.value='';sanxunFinanceRefreshCategory(form,'');});
 }
-document.getElementById('recordForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);const record={...(r||{}),_id:r?._id||newId()};fields.forEach((k,i)=>record[k]=k==='宮廟職位'?[...f.getAll('roleChoice'),...String(f.get('roleOther')||'').split(/[、,，]/).map(x=>x.trim()).filter(Boolean)].join('、'):String(f.get('f'+i)||'').trim());if(name==='信眾管理'){const ref=db['信眾管理'].filter(p=>p._id!==record._id&&p['姓名']===record['介紹人']);record._介紹人ID=ref.length===1?ref[0]._id:'';}if(r){const idx=db[name].findIndex(x=>x._id===r._id);db[name][idx]=record}else db[name].unshift(record);persist();document.getElementById('editOverlay').remove();modulePage(name)}}
+document.getElementById('recordForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);const record={...(r||{}),_id:r?._id||newId()};fields.forEach((k,i)=>record[k]=k==='宮廟職位'?[...f.getAll('roleChoice'),...String(f.get('roleOther')||'').split(/[、,，]/).map(x=>x.trim()).filter(Boolean)].join('、'):String(f.get('f'+i)||'').trim());if(name==='財務管理'){const candidate=(db['信眾管理']||[]).filter(p=>String(p['姓名']||'').trim()===String(record['信眾']||'').trim());record.personId=candidate.length===1?candidate[0]._id:'';}if(name==='信眾管理'){const ref=db['信眾管理'].filter(p=>p._id!==record._id&&p['姓名']===record['介紹人']);record._介紹人ID=ref.length===1?ref[0]._id:'';}if(r){const idx=db[name].findIndex(x=>x._id===r._id);db[name][idx]=record}else db[name].unshift(record);persist();document.getElementById('editOverlay').remove();modulePage(name)}}
 function deleteRecord(name,id){if(!confirm('確定要刪除這筆示範資料嗎？'))return;db[name]=db[name].filter(x=>x._id!==id);persist();modulePage(name)}
 function exportCsv(name){const fields=fieldMap[name];const csv='\ufeff'+[fields,...db[name].map(r=>fields.map(k=>r[k]||''))].map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=name+'-示範資料.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function home(){const follower=db['信眾管理'].length;const donations=db['功德箱管理'].reduce((a,r)=>a+money(r['金額']),0);const rituals=db['儀式管理'].length;const activities=db['活動管理'].length;const birthdays=db['生日提醒'].length;const upcoming=db['活動管理'].slice(0,3);const tasks=db['宮務行政'].slice(0,4);document.getElementById('content').innerHTML=`<div class="hero"><div><div class="eyebrow">— 哪吒元帥 —</div><h1>彰化三巡府</h1><p>護佑眾生・廣結善緣</p><p style="font-size:12px;letter-spacing:1px">四海平安　｜　三巡護佑　｜　風調雨順</p></div><div class="motto">三巡護佑　四海平安</div></div><section class="stats">${[['♟','信眾總數',follower,'信眾管理'],['♥','功德捐款',fmt(donations),'功德箱管理'],['❀','儀式登記',rituals,'儀式管理'],['▦','活動紀錄',activities,'活動管理'],['♙','生日提醒',birthdays,'生日提醒']].map(([i,t,n,link])=>`<div class="stat" onclick="go('${link}')"><span class="ico">${i}</span><div class="label">${t}</div><div class="num">${esc(n)}</div><div class="up">查看紀錄 ↗</div></div>`).join('')}</section><div class="panels"><section class="panel"><h3>▦　近期活動 <button class="secondary tiny" style="float:right" onclick="go('活動管理')">查看全部</button></h3>${upcoming.map(r=>`<div class="activity"><div class="date">${esc(r['活動日期']||'待定')}</div><div><div class="name">${esc(r['活動名稱'])}</div><div class="meta">${esc(r['活動時間']||'活動時間待定')}</div></div><span class="tag">${esc(r['狀態']||'已建立')}</span></div>`).join('')||'<p class="muted">尚無活動</p>'}</section><section class="panel"><h3>▤　宮務待辦 <button class="secondary tiny" style="float:right" onclick="go('宮務行政')">查看全部</button></h3>${tasks.map(r=>`<div class="todo"><span class="dot"></span>${esc(r['工作事項'])}<time>${esc(r['期限']||'—')}</time></div>`).join('')||'<p class="muted">尚無待辦事項</p>'}<h3 style="margin-top:24px">♧　關懷提醒</h3><div class="reminder">目前共有 ${db['關懷追蹤'].length} 筆關懷追蹤紀錄</div></section><section class="panel"><h3>▥　財務概覽</h3><div class="chartcaption">示範資料統計</div>${[['功德箱捐款',fmt(donations)],['財務收入',fmt(db['財務管理'].filter(r=>r['收支類型']==='收入').reduce((a,r)=>a+money(r['金額']),0))],['財務支出',fmt(db['財務管理'].filter(r=>r['收支類型']==='支出').reduce((a,r)=>a+money(r['金額']),0))]].map(([k,v])=>`<div class="legend"><i></i>${k}<b>${v}</b></div>`).join('')}<button class="secondary" onclick="go('財務管理')">查看財務明細 →</button></section></div><div class="notice">首頁統計依目前載入資料計算。請至「宮務行政 → 系統設定」確認雲端連線及備份狀態。</div>`}
@@ -764,10 +764,10 @@ const arr=n=>Array.isArray(db[n])?db[n]:[];
 const text=v=>String(v??'').trim();
 const moneyNum=v=>Number(money(v))||0;
 const people=()=>arr('信眾管理');
-const names=(r)=>[r['信眾'],r['信眾姓名'],r['姓名'],r['捐款人']].map(text).filter(Boolean);
+const names=(r)=>[r['信眾'],r['信眾姓名'],r['姓名'],r['捐款人'],r['付款人'],r['繳費人'],r['預約人']].map(text).filter(Boolean);
 function person(r){
  const id=text(r.personId||r['信眾ID']||r.believerId||r.person_id);
- if(id)return people().find(p=>text(p._id)===id)||null;
+ if(id){const linked=people().find(p=>text(p._id)===id);if(linked)return linked;}
  for(const name of names(r)){
    const matched=people().filter(p=>text(p['姓名'])===name);
    if(matched.length===1)return matched[0];
@@ -779,7 +779,7 @@ const rowid=r=>text(r._id||r.id);
 function records(){
  const out=[];
  const add=(source,r,kind,opts={})=>{const p=person(r);out.push({source,sourceId:rowid(r),personId:p?._id||null,personName:p?.['姓名']||names(r)[0]||'',date:date(r),kind,...opts})};
- arr('活動管理').filter(r=>r._calendarType==='consultation').forEach(r=>{const b=r._booking||{};const p=people().find(x=>text(x._id)===text(b.personId));out.push({source:'問事預約',sourceId:rowid(r),personId:p?._id||null,personName:p?.['姓名']||text(b.name),date:text(r['活動日期']),kind:'問事預約',title:'問事預約｜'+text(b.subject||'一般問事'),note:text(r['活動時間'])+' '+text(r['狀態'])+' '+text(b.note),fee:null,paid:null,bookingId:rowid(r)})});
+ arr('活動管理').filter(r=>r._calendarType==='consultation').forEach(r=>{const b=r._booking||{};const p=person({...b,'信眾':b.name});out.push({source:'問事預約',sourceId:rowid(r),personId:p?._id||null,personName:p?.['姓名']||text(b.name),date:text(r['活動日期']),kind:'問事預約',title:'問事預約｜'+text(b.subject||'一般問事'),note:text(r['活動時間'])+' '+text(r['狀態'])+' '+text(b.note),fee:null,paid:null,bookingId:rowid(r)})});
  arr('參與紀錄').forEach(r=>{
   const event=text(r['活動／服務']),ritual=text(r['儀式項目']);
   add('參與紀錄',r,ritual?'儀式補登':'活動補登',{title:event||ritual||'一般參與',ritual,event,note:text(r['備註']),fee:null,paid:null,donation:moneyNum(r['捐款金額'])});
@@ -793,7 +793,7 @@ function records(){
  });
  return out.sort((a,b)=>b.date.localeCompare(a.date));
 }
-function forPerson(id){return records().filter(r=>r.personId===id)}
+function forPerson(id){return records().filter(r=>text(r.personId)===text(id))}
 function totals(rows){return {activity:rows.filter(r=>['活動報名','活動補登'].includes(r.kind)).length,ritual:rows.filter(r=>['儀式登記','儀式補登'].includes(r.kind)).length,received:rows.filter(r=>r.kind==='活動報名').reduce((v,r)=>v+(r.paid||0),0),unpaid:rows.filter(r=>r.kind==='活動報名').reduce((v,r)=>v+Math.max(0,(r.fee||0)-(r.paid||0)),0)}}
 function keylink(r){
  if(r.source==='問事預約'&&r.bookingId)return `<button class="link" onclick='sanxunOpenBooking(${JSON.stringify(r.bookingId)})'>查看預約</button>`;
@@ -1062,12 +1062,12 @@ html,body{max-width:100%;overflow-x:hidden}
    const pageRows=people.slice((pageNumber-1)*PAGE_SIZE,pageNumber*PAGE_SIZE);
    directory.replaceChildren();
    const header=document.createElement('div');header.className='sx-person-row sx-person-header';
-   for(const text of ['姓名','電話','生日','入廟日期','操作']){const el=document.createElement('span');el.textContent=text;header.appendChild(el)}directory.appendChild(header);
+   for(const text of ['姓名','電話','生日','操作']){const el=document.createElement('span');el.textContent=text;header.appendChild(el)}directory.appendChild(header);
    function field(cls,txt){const el=document.createElement('div');el.className=cls;el.textContent=String(txt??'—')||'—';return el}
    for(const person of pageRows){
      const row=document.createElement('div');row.className='sx-person-row sx-person-entry';
      const b=String(person['國曆生日']||'').trim();const birthday=/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(b)?b.replace(/^\d{4}[-/]/,''):b||'—';
-     row.append(field('sx-person-name',person['姓名']||'—'),field('sx-person-phone',person['電話']||'—'),field('sx-person-birthday',birthday),field('sx-person-join-date',person['入廟日期']||'—'));
+     row.append(field('sx-person-name',person['姓名']||'—'),field('sx-person-phone',person['電話']||'—'),field('sx-person-birthday',birthday));
      const actions=document.createElement('div');actions.className='sx-person-actions';
      function add(label,cls,fn){const btn=document.createElement('button');btn.type='button';btn.className=cls;btn.textContent=label;btn.onclick=fn;actions.appendChild(btn)}
      add('查看詳情','sx-person-primary',()=>window.sanxunProfile(person._id));
@@ -1130,345 +1130,6 @@ html,body{max-width:100%;overflow-x:hidden}
  const previousCalendar=window.sanxunCalendar;
  if(typeof previousCalendar==='function')window.sanxunCalendar=function(){previousCalendar();};
  if(isRoster())createDirectory();
-})();
-</script>
-
-<style id="sx-join-date-compact-layout-v1">
-/* Five content-sized columns. Avoid distributing huge empty space between name / phone / birthday. */
-#content #sx-people-directory {
-  width:100%!important; max-width:820px!important; margin-left:0!important;
-  overflow:visible!important; font-variant-numeric:tabular-nums;
-}
-#content #sx-people-directory .sx-person-row {
-  display:grid!important;
-  grid-template-columns:126px 148px 92px 135px minmax(210px,1fr)!important;
-  column-gap:10px!important; row-gap:8px!important;
-  padding:11px 12px!important; width:100%!important;
-  min-height:54px!important; align-items:center!important;
-}
-#content #sx-people-directory .sx-person-header {min-height:42px!important}
-#content #sx-people-directory .sx-person-row>div,
-#content #sx-people-directory .sx-person-row>span {overflow-wrap:normal!important;word-break:normal!important}
-#content #sx-people-directory .sx-person-phone {white-space:nowrap}
-#content #sx-people-directory .sx-person-join-date {white-space:nowrap}
-#content #sx-people-directory .sx-person-actions {flex-wrap:nowrap!important;gap:5px!important}
-#content #sx-people-directory .sx-person-actions button {padding:7px 9px!important;font-size:12px!important}
-@media(max-width:1080px){
- #content #sx-people-directory {max-width:100%!important}
- #content #sx-people-directory .sx-person-header {display:none!important}
- #content #sx-people-directory .sx-person-row.sx-person-entry {
-   grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
-   gap:10px 14px!important;
-   padding:14px!important;
-   border:1px solid #dfe9e7!important; border-radius:13px!important; margin-bottom:12px!important;
- }
- #content #sx-people-directory .sx-person-name {grid-column:1/-1!important;font-size:17px!important}
- #content #sx-people-directory .sx-person-phone::before {content:'電話';display:block;color:#82949a;font-size:11px}
- #content #sx-people-directory .sx-person-birthday::before {content:'生日';display:block;color:#82949a;font-size:11px}
- #content #sx-people-directory .sx-person-join-date::before {content:'入廟日期';display:block;color:#82949a;font-size:11px}
- #content #sx-people-directory .sx-person-actions {grid-column:1/-1!important;flex-wrap:wrap!important}
-}
-</style>
-<style id="sx-profile-basic-restored">
-#content .sx-profile-basic{background:#fff;border:1px solid #dfeae7;border-radius:18px;padding:22px 24px;margin:15px 0 20px;box-shadow:0 2px 10px #1233}
-#content .sx-profile-basic-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-#content .sx-profile-basic-top h3{margin:0;font-size:19px;color:#153b49}
-#content .sx-profile-basic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px 20px}
-#content .sx-profile-basic-field{padding:7px 0;min-width:0;border-bottom:1px solid #f0f3f3}
-#content .sx-profile-basic-field .sx-field-label{display:block;color:#7a9299;font-size:12px;margin-bottom:6px}
-#content .sx-profile-basic-field .sx-field-value{font-size:14px;color:#193d4a;font-weight:600;overflow-wrap:anywhere;white-space:normal}
-#content .sx-profile-basic-field.sx-wide{grid-column:span 2}
-#content .sx-profile-basic-note{color:#6e868e;font-size:12px;margin:13px 0 0}
-@media(max-width:900px){#content .sx-profile-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#content .sx-profile-basic-field.sx-wide{grid-column:span 2}}
-@media(max-width:520px){#content .sx-profile-basic{padding:16px}#content .sx-profile-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 13px}#content .sx-profile-basic-field.sx-wide{grid-column:1/-1}}
-</style>
-<style id="sx-profile-family-display-v2">
-#content .sx-profile-relation-panel{margin-top:18px;padding:16px 18px;background:#f2faf8;border:1px solid #d9ebe5;border-radius:12px}
-#content .sx-profile-relation-panel h4{margin:0 0 12px;font-size:16px;color:#164554}
-#content .sx-profile-relations{display:flex;flex-wrap:wrap;gap:8px}
-#content .sx-profile-relation-item{display:flex;align-items:center;gap:10px;background:#fff;padding:8px 10px;border:1px solid #d8e7e1;border-radius:9px;font-size:13px}
-</style>
-<script id="sx-profile-basic-restored-script">
-(function(){
- 'use strict';
- const baseProfile=window.sanxunProfile;
- if(typeof baseProfile!=='function')return;
- const byId=id=>(db['信眾管理']||[]).find(p=>String(p._id)===String(id));
- const fields=[
-  ['姓名','姓名'],['性別','性別'],['電話','電話'],
-  ['國曆生日','國曆生日'],['農曆生日','農曆生日'],['出生時辰','出生時辰'],
-  ['地址','地址','wide'],['入廟日期','入廟日期'],['宮廟職位','宮廟職位'],
-  ['介紹人','介紹人'],['家庭成員','家庭成員','wide'],['備註','備註','wide']
- ];
- let activeId=null;
- let inRender=false;
- const clean=x=>(x===undefined||x===null||String(x).trim()==='')?'—':String(x);
- function appendField(parent,label,value,wide){
-  const el=document.createElement('div');el.className='sx-profile-basic-field'+(wide?' sx-wide':'');
-  const key=document.createElement('span');key.className='sx-field-label';key.textContent=label;
-  const val=document.createElement('div');val.className='sx-field-value';val.textContent=clean(value);
-  el.append(key,val);parent.append(el);
- }
- function relationDetails(person){
-  const raw=Array.isArray(person._relations)?person._relations:[];
-  if(!raw.length)return [];
-  return raw.map(r=>({id:r.id,type:r.type||'親屬',person:byId(r.id)}));
- }
- function renderProfile(){
-  if(inRender||activeId===null)return;
-  const content=document.getElementById('content');
-  const head=content?.querySelector('.moduleHead');
-  const person=byId(activeId);
-  // Only appear within the personal-history detail page, not directory or edit forms.
-  if(!head||!person||!head.textContent.includes('個人參與及收款歷史'))return;
-  if(content.querySelector('.sx-profile-basic[data-person-id="'+CSS.escape(String(activeId))+'"]'))return;
-  inRender=true;
-  try{
-   content.querySelectorAll('.sx-profile-basic').forEach(el=>el.remove());
-   const section=document.createElement('section');section.className='sx-profile-basic';section.dataset.personId=String(activeId);
-   const bar=document.createElement('div');bar.className='sx-profile-basic-top';
-   const title=document.createElement('h3');title.textContent='信眾基本資料';
-   const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='✎ 編輯基本資料';
-   edit.onclick=()=>openEditor('信眾管理',person._id);
-   bar.append(title,edit);section.append(bar);
-   const grid=document.createElement('div');grid.className='sx-profile-basic-grid';
-   for(const [label,key,wide] of fields){
-    let value=person[key];
-    if(key==='地址')value=person['地址']||person['住址'];
-    if(key==='入廟日期')value=person['入廟日期']||person['加入日期'];
-    if(key==='介紹人'){
-     const intro=byId(person['介紹人ID']);
-     value=intro?intro['姓名']:person['介紹人'];
-    }
-    appendField(grid,label,value,wide);
-   }
-   section.append(grid);
-   const rel=document.createElement('div');rel.className='sx-profile-relation-panel';
-   const rt=document.createElement('h4');rt.textContent='家庭關係';rel.append(rt);
-   const links=relationDetails(person);
-   if(!links.length){const e=document.createElement('p');e.className='sx-profile-basic-note';e.textContent='尚未綁定家庭關係';rel.append(e)}
-   else{
-    const list=document.createElement('div');list.className='sx-profile-relations';
-    for(const link of links){
-     const item=document.createElement('div');item.className='sx-profile-relation-item';
-     const text=document.createElement('span');text.textContent=(link.person?.['姓名']||'已移除的信眾')+'（'+link.type+'）';item.append(text);
-     if(link.person){const btn=document.createElement('button');btn.type='button';btn.className='secondary tiny';btn.textContent='查看檔案';btn.onclick=()=>window.sanxunProfile(link.id);item.append(btn)}
-     list.append(item)
-    }
-    rel.append(list)
-   }
-   section.append(rel);
-   const note=document.createElement('p');note.className='sx-profile-basic-note';note.textContent='未登錄欄位顯示「—」；家庭關係依信眾編輯頁綁定內容呈現。';section.append(note);
-   head.insertAdjacentElement('afterend',section);
-  }finally{inRender=false}
- }
- window.sanxunProfile=function(id,tab){
-  activeId=String(id);
-  const result=baseProfile.apply(this,arguments);
-  renderProfile();
-  queueMicrotask(renderProfile);
-  return result;
- };
- // Legacy modules sometimes replace #content after rendering a tab: restore the profile section.
- const target=document.getElementById('content');
- if(target){
-  let scheduled=false;
-  new MutationObserver(()=>{
-   if(inRender||scheduled||activeId===null)return;
-   if(target.querySelector('.sx-profile-basic[data-person-id="'+CSS.escape(String(activeId))+'"]'))return;
-   if(!target.querySelector('.moduleHead')?.textContent.includes('個人參與及收款歷史'))return;
-   scheduled=true;queueMicrotask(()=>{scheduled=false;renderProfile()});
-  }).observe(target,{childList:true,subtree:true});
- }
-})();
-</script>
-
-<script id="sx-family-save-and-route-v3">
-/* 2026-11-04: Save relationship selections, then preserve navigation across reloads.
- * Session storage keeps only module name and record ID (not personal details).
- * Does not initialize or overwrite the server-side snapshot. */
-(function(){
- 'use strict';
- const NAV_KEY='sanxun-active-view-v3';
- const roster=()=>Array.isArray(db?.['信眾管理'])?db['信眾管理']:[];
- const getPerson=id=>roster().find(p=>String(p._id)===String(id));
- let inRestore=false;
- let activePersonId=null;
- function allowedModule(name){return Array.isArray(modules)&&modules.some(m=>m[0]===name)}
- function writeView(view){try{sessionStorage.setItem(NAV_KEY,JSON.stringify(view))}catch(e){console.warn('無法保存頁面位置',e)}}
- function readView(){try{return JSON.parse(sessionStorage.getItem(NAV_KEY)||'null')}catch{return null}}
- // Remember the user's actual page selection. The original app defaults to home on reload.
- const previousGo=go;
- go=function(name){
-   const result=previousGo.apply(this,arguments);
-   if(!inRestore&&allowedModule(name)&&current===name){
-     activePersonId=null;
-     writeView({kind:'module',name:name});
-   }
-   return result;
- };
- window.go=go;
- if(typeof window.sanxunProfile==='function'){
-   const previousProfile=window.sanxunProfile;
-   window.sanxunProfile=function(id,tab){
-     const result=previousProfile.apply(this,arguments);
-     if(getPerson(id)){
-       activePersonId=String(id);
-       if(!inRestore)writeView({kind:'person',id:String(id),tab:String(tab||'全部歷史')});
-     }
-     return result;
-   };
- }
- // The existing family editor stores an in-memory pending list. Selecting a person
- // but skipping '+ 加入' previously saved nothing. Make the selected choice count.
- const previousEditor=openEditor;
- openEditor=function(name,id){
-   const returnToPerson=name==='信眾管理'&&activePersonId!==null&&String(activePersonId)===String(id);
-   const result=previousEditor.apply(this,arguments);
-   if(name!=='信眾管理')return result;
-   const form=document.getElementById('recordForm');
-   if(!form||typeof form.onsubmit!=='function')return result;
-   const existingSubmit=form.onsubmit;
-   form.onsubmit=function(event){
-     const select=document.getElementById('familyTarget');
-     const add=document.getElementById('familyAdd');
-     // Only add once; the original editor already prevents duplicate links.
-     if(select?.value && add){
-       const chosen=String(select.value);
-       const person=getPerson(id);
-       const present=Array.isArray(person?._relations)&&person._relations.some(x=>String(x.id)===chosen);
-       const selectedText=document.getElementById('familySelected')?.textContent||'';
-       const label=getPerson(chosen)?.['姓名']||'';
-       if(!present && (!label || !selectedText.includes(label)))add.click();
-     }
-     const oldIds=new Set(roster().map(p=>String(p._id)));
-     const result=existingSubmit.call(this,event);
-     const saved=id?getPerson(id):roster().find(p=>!oldIds.has(String(p._id)));
-     // Original submit closes the editor and writes data to the existing persist/sync adapter.
-     if(saved&&returnToPerson&&!document.getElementById('editOverlay')){
-       queueMicrotask(()=>window.sanxunProfile?.(saved._id));
-     }
-     return result;
-   };
-   return result;
- };
- window.openEditor=openEditor;
- // Do not intercept public registration or login URLs.
- function restore(){
-   if(new URLSearchParams(location.search).has('register'))return;
-   const view=readView();
-   if(!view)return;
-   inRestore=true;
-   try{
-     if(view.kind==='person'&&getPerson(view.id)){
-       go('信眾管理');
-       window.sanxunProfile?.(view.id,view.tab||'全部歷史');
-     }else if(view.kind==='module'&&allowedModule(view.name)){
-       go(view.name);
-     }
-   }catch(e){console.warn('還原頁面位置失敗',e)}
-   finally{inRestore=false}
- }
- // Defer until app's normal initial home render has run. Subsequent sync updates
- // may redraw the module, but the navigation selection stays in sessionStorage.
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(restore,50),{once:true});
- else setTimeout(restore,50);
-})();
-</script>
-<script id="sx-family-atomic-save-v4">
-/* Single-transaction browser state update: prevent older chained onsubmit handlers
-   from persisting before the relation data has been attached. Uses existing
-   persist() cloud adapter; does not overwrite the server outside that adapter. */
-(function(){
- 'use strict';
- const list=()=>Array.isArray(db['信眾管理'])?db['信眾管理']:[];
- const person=id=>list().find(p=>String(p._id)===String(id));
- const inverse={'配偶':'配偶','父母':'子女','子女':'父母','兄弟姊妹':'兄弟姊妹','祖父母':'孫子女','孫子女':'祖父母','其他親屬':'其他親屬','其他':'其他'};
- const priorOpen=openEditor;
- openEditor=function(name,id){
-   const answer=priorOpen.apply(this,arguments);
-   if(name!=='信眾管理')return answer;
-   const form=document.getElementById('recordForm');
-   const select=document.getElementById('familyTarget');
-   const typeSelect=document.getElementById('familyType');
-   if(!form||!select||!typeSelect)return answer;
-   const original=person(id);
-   const pending=(Array.isArray(original?._relations)?original._relations:[])
-      .filter(r=>person(r.id)&&String(r.id)!==String(id))
-      .map(r=>({id:String(r.id),type:String(r.type||'其他')}));
-   const add=document.getElementById('familyAdd');
-   // Mirror additions and removals without changing the existing editor display.
-   if(add)add.addEventListener('click',()=>{
-     const target=String(select.value||'');
-     if(!target||!person(target)||String(id)===target||pending.some(r=>r.id===target))return;
-     pending.push({id:target,type:typeSelect.value||'其他'});
-   },true);
-   const chosen=document.getElementById('familySelected');
-   if(chosen)chosen.addEventListener('click',event=>{
-     const b=event.target.closest('[data-remove]');
-     if(!b)return;
-     const i=Number(b.dataset.remove);
-     if(Number.isInteger(i)&&i>=0&&i<pending.length)pending.splice(i,1);
-   },true);
-   // Capture submit before old form.onsubmit handlers. The old handlers save two
-   // different snapshots, which can leave cloud revision/payload out of sync.
-   form.addEventListener('submit',function(event){
-     event.preventDefault();
-     event.stopImmediatePropagation();
-     const candidate=String(select.value||'');
-     if(candidate&&person(candidate)&&candidate!==String(id)&&!pending.some(r=>r.id===candidate)){
-       pending.push({id:candidate,type:String(typeSelect.value||'其他')});
-     }
-     const fd=new FormData(form);
-     const fields=fieldMap['信眾管理'];
-     const record=original?{...original}:{_id:newId()};
-     for(let i=0;i<fields.length;i++){
-       const k=fields[i];
-       record[k]=k==='宮廟職位'
-         ? [...fd.getAll('roleChoice'),...String(fd.get('roleOther')||'').split(/[、,，]/).map(x=>x.trim()).filter(Boolean)].join('、')
-         : String(fd.get('f'+i)||'').trim();
-     }
-     if(!record['姓名']){alert('請填寫信眾姓名');return}
-     const introducers=list().filter(p=>String(p._id)!==String(record._id)&&p['姓名']===record['介紹人']);
-     record._介紹人ID=introducers.length===1?introducers[0]._id:'';
-     const dedup=[];const ids=new Set();
-     for(const r of pending){
-       if(!person(r.id)||String(r.id)===String(record._id)||ids.has(String(r.id)))continue;
-       ids.add(String(r.id));dedup.push({id:String(r.id),type:String(r.type||'其他')});
-     }
-     record._relations=dedup;
-     // Create one coherent state containing both directions BEFORE persist().
-     const originalRows=list();
-     const nextRows=originalRows.map(p=>({...p,_relations:Array.isArray(p._relations)?p._relations.map(r=>({...r})):[]}));
-     const idx=nextRows.findIndex(p=>String(p._id)===String(record._id));
-     if(idx>=0)nextRows[idx]=record;
-     else nextRows.unshift(record);
-     for(const other of nextRows){
-       if(String(other._id)===String(record._id))continue;
-       other._relations=(other._relations||[]).filter(r=>String(r.id)!==String(record._id));
-       const connected=dedup.find(r=>r.id===String(other._id));
-       if(connected)other._relations.push({id:String(record._id),type:inverse[connected.type]||'其他'});
-     }
-     db['信眾管理']=nextRows;
-     if(!persist()){
-       db['信眾管理']=originalRows;
-       alert('本機儲存失敗，原資料未修改。請先檢查瀏覽器儲存空間。');
-       return;
-     }
-     const stored=person(record._id);
-     const verified=stored&&dedup.every(r=>stored._relations.some(x=>String(x.id)===r.id));
-     if(!verified){alert('家庭關係儲存檢查未通過，請停止修改並備份資料。');return}
-     document.getElementById('editOverlay')?.remove();
-     try{window.sanxunProfile?.(record._id)}catch(e){console.warn('個人詳情重繪失敗',e);go('信眾管理')}
-     // Alert only when there is a real sync warning; local success ≠ cloud success.
-     const st=document.getElementById('temple-sync-box');
-     if(st&&/失敗|衝突|尚未|錯誤|⚠/.test(st.textContent||'')){
-       alert('家庭關係已存到目前瀏覽器，但雲端同步有異常。請下載本機備份，暫停跨裝置編輯。');
-     }
-   },true);
-   return answer;
- };
- window.openEditor=openEditor;
 })();
 </script>
 </body></html>
