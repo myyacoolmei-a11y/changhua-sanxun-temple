@@ -1062,12 +1062,12 @@ html,body{max-width:100%;overflow-x:hidden}
    const pageRows=people.slice((pageNumber-1)*PAGE_SIZE,pageNumber*PAGE_SIZE);
    directory.replaceChildren();
    const header=document.createElement('div');header.className='sx-person-row sx-person-header';
-   for(const text of ['姓名','電話','生日','操作']){const el=document.createElement('span');el.textContent=text;header.appendChild(el)}directory.appendChild(header);
+   for(const text of ['姓名','電話','生日','職位','操作']){const el=document.createElement('span');el.textContent=text;header.appendChild(el)}directory.appendChild(header);
    function field(cls,txt){const el=document.createElement('div');el.className=cls;el.textContent=String(txt??'—')||'—';return el}
    for(const person of pageRows){
      const row=document.createElement('div');row.className='sx-person-row sx-person-entry';
      const b=String(person['國曆生日']||'').trim();const birthday=/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(b)?b.replace(/^\d{4}[-/]/,''):b||'—';
-     row.append(field('sx-person-name',person['姓名']||'—'),field('sx-person-phone',person['電話']||'—'),field('sx-person-birthday',birthday));
+     row.append(field('sx-person-name',person['姓名']||'—'),field('sx-person-phone',person['電話']||'—'),field('sx-person-birthday',birthday),field('sx-person-position',person['宮廟職位']||person['職位']||'—'));
      const actions=document.createElement('div');actions.className='sx-person-actions';
      function add(label,cls,fn){const btn=document.createElement('button');btn.type='button';btn.className=cls;btn.textContent=label;btn.onclick=fn;actions.appendChild(btn)}
      add('查看詳情','sx-person-primary',()=>window.sanxunProfile(person._id));
@@ -1485,6 +1485,84 @@ window.sxPersonLinkVersion='2026-11-06-v5';
  renderRows=function(name,q=''){previousRows(name,q);if(name==='活動管理')fixRows()};
  if(current==='活動管理')fixRows();
  window.sxActivityTypeSplitVersion='2026-11-06-v7';
+})();
+</script>
+<style id="sx-profile-directory-route-fix-css">
+@media (min-width:901px){
+ #sx-people-directory{width:100%!important;max-width:100%!important}
+ #sx-people-directory .sx-person-row{display:grid!important;grid-template-columns:minmax(90px,1.15fr) minmax(115px,1.1fr) minmax(78px,.65fr) minmax(85px,.8fr) minmax(230px,1.45fr)!important;align-items:center;gap:12px!important;padding:9px 14px!important}
+ #sx-people-directory .sx-person-entry{min-height:50px!important}
+ #sx-people-directory .sx-person-actions{justify-content:flex-end!important}
+ #sx-people-directory .sx-page-controls{max-width:100%!important}
+ #sx-people-directory .sx-person-position{color:#32666b;font-size:13px}
+}
+@media(max-width:900px){
+ #sx-people-directory .sx-person-position{display:block!important;grid-column:1/-1!important;color:#32666b;font-size:13px}
+ #sx-people-directory .sx-person-position:before{content:'職位：';color:#6f8b91}
+}
+.sx-person-basics{margin:16px 0;padding:18px 20px;background:#fff;border:1px solid #d5e7e3;border-radius:16px}
+.sx-person-basics h3{margin:0 0 13px;color:#173e4d;font-size:17px}
+.sx-person-basic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 18px}
+.sx-person-basic-item{padding:10px 12px;border-radius:10px;background:#f5faf8;min-width:0;overflow-wrap:anywhere}
+.sx-person-basic-label{display:block;font-size:12px;color:#6b858d;margin-bottom:5px}
+.sx-person-basic-value{font-size:15px;font-weight:650;color:#173e4d}
+.sx-basic-actions{display:flex;justify-content:flex-end;margin-top:14px}
+@media(max-width:750px){.sx-person-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:430px){.sx-person-basic-grid{grid-template-columns:1fr}}
+</style>
+<script id="sx-profile-directory-route-fix-20261106">
+(function(){
+ 'use strict';
+ const ROUTE_KEY='sanxun-last-route-v2';
+ const allowedModules=()=>typeof modules!=='undefined'?modules.map(x=>x[0]):[];
+ const str=v=>String(v??'').trim();
+ // Keep the existing backend, profile transaction history and permission checks intact.
+ function putRoute(route){try{sessionStorage.setItem(ROUTE_KEY,JSON.stringify(route));history.replaceState(null,'',location.pathname+location.search+'#sx='+encodeURIComponent(route.type==='profile'?'信眾管理':route.name));}catch(e){console.warn('頁面位置儲存失敗',e)}}
+ function readRoute(){try{const raw=sessionStorage.getItem(ROUTE_KEY);if(raw){const r=JSON.parse(raw);if(r&&['module','profile'].includes(r.type))return r}}catch(e){}
+   try{const m=location.hash.match(/^#sx=(.*)$/);if(m)return {type:'module',name:decodeURIComponent(m[1])}}catch(e){}
+   return null;
+ }
+ const baseGo=go;
+ go=function(name){const result=baseGo.apply(this,arguments);if(str(current)===str(name)&&allowedModules().includes(name))putRoute({type:'module',name});return result};
+ window.go=go;
+ const baseProfile=window.sanxunProfile;
+ function renderProfileBasics(id){
+   const person=(db?.['信眾管理']||[]).find(p=>str(p._id)===str(id));if(!person)return;
+   const header=document.querySelector('#content .moduleHead');if(!header)return;
+   document.querySelector('#content .sx-person-basics')?.remove();
+   const box=document.createElement('section');box.className='sx-person-basics';
+   const title=document.createElement('h3');title.textContent='信眾基本資料';box.appendChild(title);
+   const grid=document.createElement('div');grid.className='sx-person-basic-grid';
+   const items=[['姓名','姓名'],['電話','電話'],['國曆生日','國曆生日'],['農曆生日','農曆生日'],['出生時辰','出生時辰'],['性別','性別'],['宮廟職位','宮廟職位'],['加入日期','加入日期'],['地址','地址'],['介紹人','介紹人'],['家庭成員','家庭成員'],['備註','備註']];
+   for(const [label,key] of items){const item=document.createElement('div');item.className='sx-person-basic-item';const l=document.createElement('span');l.className='sx-person-basic-label';l.textContent=label;const v=document.createElement('div');v.className='sx-person-basic-value';v.textContent=str(person[key]||(key==='宮廟職位'?person['職位']:''))||'尚未填寫';item.append(l,v);grid.appendChild(item)}
+   box.appendChild(grid);
+   const actions=document.createElement('div');actions.className='sx-basic-actions';
+   const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='編輯基本資料';edit.onclick=()=>openEditor('信眾管理',person._id);actions.appendChild(edit);box.appendChild(actions);
+   const intro=document.querySelector('#content .sx-referrer-panel');if(intro)intro.before(box);else header.after(box);
+ }
+ if(typeof baseProfile==='function')window.sanxunProfile=function(id,tab){
+   const result=baseProfile.apply(this,arguments);
+   if((db?.['信眾管理']||[]).some(p=>str(p._id)===str(id))){renderProfileBasics(id);putRoute({type:'profile',id:str(id),tab:tab||'全部歷史'})}
+   return result;
+ };
+ // The old inline button uses the lexical global identifier sanxunProfile, which references window.
+ function restore(){const r=readRoute();if(!r)return;
+   if(r.type==='profile'){
+     if((db?.['信眾管理']||[]).some(p=>str(p._id)===str(r.id))&&typeof window.sanxunProfile==='function')window.sanxunProfile(r.id,r.tab||'全部歷史');
+     else go('信眾管理');
+   }else if(allowedModules().includes(r.name))go(r.name);
+ }
+ // Restore after scripts, and retry after auth/data hydration when necessary.
+ let restored=false;
+ function attempt(){if(restored)return;const route=readRoute();if(!route)return;
+   if(route.type==='profile'&&!(db?.['信眾管理']||[]).some(p=>str(p._id)===str(route.id)))return;
+   restored=true;try{restore()}catch(e){restored=false;console.warn('頁面恢復失敗',e)}
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',attempt,{once:true});else queueMicrotask(attempt);
+ window.addEventListener('load',attempt);
+ // For asynchronous cloud data arriving shortly after load, without forcing a jump when the person is absent.
+ let tries=0;const restoreInterval=setInterval(()=>{attempt();if(restored||++tries>=12)clearInterval(restoreInterval)},350);
+ window.sxRestoreNavigationVersion='2026-11-06-v8';
 })();
 </script>
 </body></html>
