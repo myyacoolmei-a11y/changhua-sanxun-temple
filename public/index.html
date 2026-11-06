@@ -1132,4 +1132,150 @@ html,body{max-width:100%;overflow-x:hidden}
  if(isRoster())createDirectory();
 })();
 </script>
+<style id="sx-identity-links-style">
+.sx-person-link{display:inline-flex;align-items:center;gap:4px;background:transparent;border:0;color:#087d79;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font:inherit;font-weight:700;padding:2px 3px}
+.sx-person-link:hover{color:#064a51;background:#eef8f4;border-radius:5px}
+.sx-link-unassigned{font-size:12px;color:#a16d12}
+.sx-link-select{padding:10px;border-radius:8px;border:1px solid #a5c8c1;background:#f2fbf8;max-width:100%;width:100%}
+.sx-link-field{margin:10px 0;padding:12px;background:#edf8f5;border:1px solid #c7e5dd;border-radius:12px;display:flex;flex-direction:column;gap:7px}
+.sx-link-field span{font-weight:700;color:#145c58}
+.sx-linked-panel{margin:18px 0;padding:14px;border:1px solid #cce2dc;border-radius:14px;background:#f6fbfa}
+.sx-linked-panel h3{margin:0 0 12px}
+.sx-linked-panel table{width:100%}
+.sx-linked-panel td,.sx-linked-panel th{padding:9px;text-align:left;border-bottom:1px solid #dbeae5}
+</style>
+<script id="sx-person-identity-bidirectional-v5">
+/* 以信眾主鍵連結現有各模組。不複製交易、不改資料庫 schema。 */
+(function(){
+'use strict';
+const groups=['功德箱管理','關懷追蹤','參與紀錄','儀式管理','財務管理','生日提醒'];
+const names=['信眾','信眾姓名','姓名','捐款人','付款人','繳費人','預約人'];
+const normalized=v=>String(v??'').trim().replace(/\s+/g,'');
+const persons=()=>Array.isArray(db?.['信眾管理'])?db['信眾管理']:[];
+const key=v=>String(v??'').trim();
+const ident=r=>key(r?.personId||r?.['信眾ID']||r?.believerId||r?.person_id||r?._booking?.personId);
+function matchRecord(r){
+ if(!r)return null;
+ const id=ident(r);
+ if(id){const p=persons().find(x=>key(x._id)===id);if(p)return p;return null;}
+ const potential=[...names.map(k=>r[k]),r?._booking?.name].map(normalized).filter(Boolean);
+ for(const name of potential){
+  const found=persons().filter(p=>normalized(p['姓名'])===name);
+  if(found.length===1)return found[0];
+ }
+ return null;
+}
+function linkLabel(r){const p=matchRecord(r);return {p,name:p?.['姓名']||[...names.map(k=>r?.[k]),r?._booking?.name].map(key).find(Boolean)||''}}
+function openProfile(pid){const p=persons().find(v=>key(v._id)===key(pid));if(!p)return alert('找不到此信眾，請檢查資料是否同步');window.sanxunProfile(p._id)}
+window.sxOpenLinkedPerson=openProfile;
+window.sxFindLinkedPerson=matchRecord;
+function personButton(pid,name){const b=document.createElement('button');b.type='button';b.className='sx-person-link';b.textContent=name||'查看信眾';b.title='開啟信眾個人資料及全部歷史';b.onclick=()=>openProfile(pid);return b}
+// 自訂紀錄列表的人名變成連結。沒有唯一身分時提示先編輯關聯，而不是猜測同名者。
+const priorRows=renderRows;
+renderRows=function(name,q=''){
+ priorRows(name,q);
+ if(!groups.includes(name)||name==='信眾管理')return;
+ const tbody=document.getElementById('rows');if(!tbody)return;
+ const fields=fieldMap[name]||[];
+ const search=String(q).toLowerCase();
+ const shown=(db[name]||[]).filter(r=>fields.some(k=>String(r[k]||'').toLowerCase().includes(search)));
+ [...tbody.querySelectorAll('tr')].forEach((tr,i)=>{
+  const r=shown[i];if(!r)return;
+  const {p,name:label}=linkLabel(r);
+  const col=fields.findIndex(k=>names.includes(k));
+  const cell=tr.cells[col>=0?col:0];if(!cell)return;
+  if(p){cell.textContent='';cell.appendChild(personButton(p._id,label))}
+  else if(label){const b=document.createElement('button');b.type='button';b.className='sx-person-link sx-link-unassigned';b.textContent=label+'（關聯信眾）';b.onclick=()=>openEditor(name,r._id);cell.textContent='';cell.appendChild(b)}
+  else if(name==='財務管理'){
+   // 沒有填人名的財務記錄仍可從「編輯」選擇既有信眾。
+   const b=document.createElement('button');b.type='button';b.className='sx-person-link sx-link-unassigned';b.textContent='＋ 選擇信眾';b.onclick=()=>openEditor(name,r._id);
+   const target=tr.cells[fields.indexOf('信眾')];target?.appendChild(b);
+  }
+ });
+};
+// 為原有編輯視窗增設「唯一信眾 ID」選擇。原本欄位與資料儲存流程維持不變。
+const priorEditor=openEditor;
+openEditor=function(module,id){
+ priorEditor(module,id);
+ if(!groups.includes(module))return;
+ const form=document.getElementById('recordForm');if(!form)return;
+ const record=id?(db[module]||[]).find(x=>key(x._id)===key(id)):null;
+ const field=document.createElement('label');field.className='sx-link-field';
+ const span=document.createElement('span');span.textContent='關聯信眾（個人歷史自動串聯）';field.appendChild(span);
+ const select=document.createElement('select');select.className='sx-link-select';select.id='sx-identity-person';
+ let initial=matchRecord(record)?._id||'';
+ select.appendChild(new Option('未指定／非信眾紀錄',''));
+ for(const p of persons()){select.appendChild(new Option(`${p['姓名']||'未命名'}｜${p['電話']||'無電話'}｜${p._id}`,key(p._id)))}
+ select.value=initial;field.appendChild(select);
+ const caption=document.createElement('small');caption.textContent='請選擇既有信眾；同名者請核對電話，避免把不同人的資料串在一起。';field.appendChild(caption);
+ form.querySelector('.formGrid')?.prepend(field);
+ const sourceName=fieldMap[module]?.find(k=>names.includes(k));
+ const sourceIndex=sourceName?fieldMap[module].indexOf(sourceName):-1;
+ select.addEventListener('change',()=>{
+  const p=persons().find(x=>key(x._id)===select.value);
+  const input=sourceIndex>=0?form.elements['f'+sourceIndex]:null;
+  if(p&&input){if(input.tagName==='SELECT'&&![...input.options].some(o=>o.value===p['姓名']))input.add(new Option(p['姓名'],p['姓名']));input.value=p['姓名']||''}
+ });
+ // 在原事件處理完成儲存後，將 ID 寫回同一筆原始紀錄。
+ const originalSubmit=form.onsubmit;
+ form.onsubmit=function(e){
+  const selected=select.value;
+  const p=persons().find(x=>key(x._id)===selected);
+  const originalRecordId=record?key(record._id):null;
+  // 當畫面沒有相對應的人名欄位時，仍可由 ID 指向信眾。
+  const result=originalSubmit.call(form,e);
+  let target=originalRecordId?(db[module]||[]).find(x=>key(x._id)===originalRecordId):(db[module]||[])[0];
+  if(target){
+   target.personId=p?key(p._id):'';
+   if(p&&sourceName)target[sourceName]=p['姓名']||'';
+   if(p&&module==='財務管理')target['信眾']=p['姓名']||'';
+   persist();
+  }
+  return result;
+ };
+};
+// 原有「財務管理」表格與活動／儀式補登列，補上可點擊的信眾入口。
+const oldModule=modulePage;
+modulePage=function(name){oldModule(name);if(groups.includes(name))renderRows(name,document.getElementById('filter')?.value||'');if(name==='活動管理')showBookingLinks()};
+function showBookingLinks(){
+ if(current!=='活動管理')return;
+ const host=document.querySelector('#content .datawrap');if(!host)return;
+ host.querySelector('#sx-booking-links')?.remove();
+ const bookings=(db['活動管理']||[]).filter(x=>x._calendarType==='consultation');
+ if(!bookings.length)return;
+ const section=document.createElement('section');section.className='sx-linked-panel';section.id='sx-booking-links';
+ section.innerHTML='<h3>問事預約｜信眾資料關聯</h3><p class="mini">點姓名查看該信眾的問事、活動、財務與儀式紀錄；尚未關聯的預約請編輯選擇信眾。</p>';
+ const wrap=document.createElement('div');wrap.className='tableScroll';const table=document.createElement('table');
+ const thead=document.createElement('thead');thead.innerHTML='<tr><th>日期</th><th>信眾（可點擊）</th><th>預約時間</th><th>狀態</th><th>操作</th></tr>';table.appendChild(thead);
+ const tbody=document.createElement('tbody');
+ for(const r of bookings){
+  const tr=document.createElement('tr');
+  const date=document.createElement('td');date.textContent=r['活動日期']||'—';tr.appendChild(date);
+  const person=document.createElement('td');const {p,name}=linkLabel({...r,...r._booking});
+  if(p)person.appendChild(personButton(p._id,p['姓名']));else {const b=document.createElement('button');b.className='sx-person-link sx-link-unassigned';b.textContent=(name||'未指定')+'（選擇信眾）';b.onclick=()=>window.sanxunOpenBooking(r._id);person.appendChild(b)}tr.appendChild(person);
+  const time=document.createElement('td');time.textContent=r['活動時間']||'—';tr.appendChild(time);
+  const state=document.createElement('td');state.textContent=r['狀態']||'—';tr.appendChild(state);
+  const ops=document.createElement('td');const edit=document.createElement('button');edit.className='secondary tiny';edit.textContent='編輯預約';edit.onclick=()=>window.sanxunOpenBooking(r._id);ops.appendChild(edit);tr.appendChild(ops);tbody.appendChild(tr)
+ }
+ table.appendChild(tbody);wrap.appendChild(table);section.appendChild(wrap);host.appendChild(section)
+}
+// 既有信眾詳情按當下原始紀錄重新整理；保障問事預約依 ID／唯一姓名顯示。
+const previousProfile=window.sanxunProfile;
+window.sanxunProfile=function(pid,tab){
+ previousProfile(pid,tab);
+ const target=persons().find(p=>key(p._id)===key(pid));if(!target)return;
+ const box=document.querySelector('#content .datawrap');if(!box)return;
+ // 若同一筆有 ID，直接用 ID；若舊紀錄無 ID 但姓名唯一相符，以舊資料補顯示。
+ // 避免將同名者的帳目錯誤合併。
+ const oldMissing=(db['財務管理']||[]).filter(r=>matchRecord(r)?._id===target._id);
+ if(tab==='財務紀錄'||!tab||tab==='全部歷史'){
+  let header=document.createElement('p');header.className='mini';header.textContent=`已辨識財務紀錄 ${oldMissing.length} 筆。財務、儀式與捐款原始紀錄仍在各自模組編輯；不自動重複計算收入。`;
+  box.prepend(header)
+ }
+};
+// 防止原始列表操作後出現不帶關聯的靜態文字。
+if(['活動管理','財務管理','參與紀錄','儀式管理','功德箱管理'].includes(current))modulePage(current);
+window.sxPersonLinkVersion='2026-11-06-v5';
+})();
+</script>
 </body></html>
