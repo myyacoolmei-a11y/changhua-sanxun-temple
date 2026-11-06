@@ -1278,4 +1278,213 @@ if(['活動管理','財務管理','參與紀錄','儀式管理','功德箱管理
 window.sxPersonLinkVersion='2026-11-06-v5';
 })();
 </script>
+<style id="sx-calendar-detail-repair-style">
+.sx-calendar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.sx-calendar-actions button{cursor:pointer;pointer-events:auto;position:relative;z-index:1}
+.sx-calendar-linked{background:#fff;border:1px solid #a5d9cd;color:#116761;border-radius:8px;padding:7px 11px;font-weight:750}
+.sx-calendar-detail{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.sx-calendar-detail .sx-calendar-caption{font-size:12px;opacity:.82;font-weight:500}
+#sx-booking-person-actions{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#sx-booking-person-actions button{border:1px solid #a5d9cd;border-radius:8px;padding:8px 12px;color:#116761;background:#f3fbf8;cursor:pointer}
+</style>
+<script id="sx-calendar-detail-repair-v6">
+(function(){
+ 'use strict';
+ const key=v=>String(v??'').trim();
+ const persons=()=>Array.isArray(db?.['信眾管理'])?db['信眾管理']:[];
+ const activities=()=>Array.isArray(db?.['活動管理'])?db['活動管理']:[];
+ function personOf(r){
+  const b=r?._booking||{};const id=key(b.personId||r?.personId||r?.['信眾ID']);
+  if(id)return persons().find(p=>key(p._id)===id)||null;
+  const name=key(b.name);if(!name)return null;
+  const matches=persons().filter(p=>key(p['姓名'])===name);
+  return matches.length===1?matches[0]:null;
+ }
+ function booking(id){return activities().find(r=>key(r._id)===key(id)&&r._calendarType==='consultation')||null}
+ function makeButton(label,action,cls='secondary tiny'){
+  const button=document.createElement('button');button.type='button';button.className=cls;button.textContent=label;
+  button.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();try{action()}catch(err){console.error('行事曆操作失敗',err);alert('無法開啟資料：'+err.message)}});return button;
+ }
+ function linkedPerson(pid){
+  const p=persons().find(v=>key(v._id)===key(pid));
+  if(!p)return alert('找不到信眾，請先確認已同步資料');
+  if(typeof window.sanxunProfile==='function')window.sanxunProfile(p._id);
+  else alert('信眾詳情功能尚未載入');
+ }
+ function enrichDialog(){
+  const overlay=document.getElementById('sx-booking-overlay');if(!overlay)return;
+  const form=overlay.querySelector('#sx-book-form');if(!form||form.querySelector('#sx-booking-person-actions'))return;
+  const select=form.elements.personId;
+  if(!select)return;
+  // Existing records can have a name but no linked ID. Suggest unique name match, never merge ambiguous names.
+  const nm=key(form.elements.name?.value);
+  if(!select.value&&nm){const found=persons().filter(p=>key(p['姓名'])===nm);if(found.length===1)select.value=key(found[0]._id)}
+  // Make options distinguish people with the same name.
+  for(const option of [...select.options]){
+   if(!option.value)continue;
+   const p=persons().find(v=>key(v._id)===key(option.value));
+   if(p)option.textContent=`${p['姓名']||'未命名'}｜${p['電話']||'無電話'}`;
+  }
+  const row=document.createElement('div');row.id='sx-booking-person-actions';
+  const status=document.createElement('small');row.appendChild(status);
+  const open=makeButton('查看信眾個人資料',()=>linkedPerson(select.value),'sx-calendar-linked');row.appendChild(open);
+  const update=()=>{
+   const p=persons().find(v=>key(v._id)===key(select.value));
+   status.textContent=p?'已關聯既有信眾：'+p['姓名']:'尚未關聯既有信眾，可直接輸入新預約人';
+   open.hidden=!p;
+  };
+  select.addEventListener('change',update);update();
+  select.closest('label')?.insertAdjacentElement('afterend',row);
+  if(!row.isConnected)form.querySelector('.sx-book-grid')?.appendChild(row);
+ }
+ const originalBooking=window.sanxunOpenBooking;
+ window.sanxunOpenBooking=function(id=''){
+  if(typeof originalBooking!=='function')return alert('問事預約編輯視窗尚未載入');
+  // The booking ID may be a number, string, or a migrated record ID.
+  const r=id?booking(id):null;
+  if(id&&!r)return alert('找不到這筆預約。請重新整理並檢查雲端同步。');
+  originalBooking(r?r._id:'');
+  enrichDialog();
+ };
+ const originalCalendar=window.sanxunCalendar;
+ function enrichCalendar(){
+  const host=document.querySelector('#content .calendar-details');if(!host)return;
+  const date=(window.sanxunBookingDate||'').split('-');
+  if(date.length!==3)return;
+  const day=date.join('-');
+  const dayRecords=activities().filter(r=>key(r['活動日期']).replaceAll('/','-')===day&&r['狀態']!=='已取消');
+  const entries=[...host.querySelectorAll('.calendar-event')];
+  // The original calendar uses the same order as the source records, with birthdays first.
+  // Replace only the booking buttons, matched by booking label + displayed time; retain other events.
+  for(const node of entries){
+   const old=node.querySelector('button');
+   if(!old||!node.classList.contains('consultation-event'))continue;
+   const label=(node.textContent||'').replace(/查看[／/]修改預約/g,'').trim();
+   const matches=dayRecords.filter(r=>r._calendarType==='consultation'&&
+    label.includes(key(r._booking?.name))&&label.includes(key(r['活動時間'])));
+   const r=matches.length===1?matches[0]:null;
+   // If labels duplicate, resolve with original inline ID rather than guessing.
+   let record=r;
+   if(!record){const onclick=old.getAttribute('onclick')||'';const mm=onclick.match(/sanxunOpenBooking\((.*)\)/);if(mm){try{record=booking(JSON.parse(mm[1]))}catch(_){record=booking(mm[1].replace(/^['"]|['"]$/g,''))}}}
+   if(!record)continue;
+   old.remove();
+   node.classList.add('sx-calendar-detail');
+   const actions=document.createElement('div');actions.className='sx-calendar-actions';
+   actions.appendChild(makeButton('查看／修改預約',()=>window.sanxunOpenBooking(record._id)));
+   const p=personOf(record);
+   if(p)actions.appendChild(makeButton('👤 '+p['姓名']+'・信眾資料',()=>linkedPerson(p._id),'sx-calendar-linked'));
+   else actions.appendChild(makeButton('關聯既有信眾',()=>window.sanxunOpenBooking(record._id),'sx-calendar-linked'));
+   node.appendChild(actions);
+  }
+  // Activities and birthdays should have a detail action as well.
+  for(const node of entries){
+   if(node.classList.contains('consultation-event'))continue;
+   const label=key(node.textContent);
+   if(node.classList.contains('birthday')){
+    const matches=persons().filter(p=>label.includes(key(p['姓名']))&&key(p['姓名']));
+    if(matches.length===1)node.appendChild(makeButton('查看信眾資料',()=>linkedPerson(matches[0]._id),'sx-calendar-linked'));
+   }else if(node.classList.contains('activity-event')){
+    const found=dayRecords.filter(a=>a._calendarType!=='consultation'&&label.includes(key(a['活動名稱']))&&key(a['活動名稱']));
+    if(found.length===1)node.appendChild(makeButton('查看／修改活動',()=>{
+     if(typeof window.sanxunOpenCalendarActivity==='function')window.sanxunOpenCalendarActivity(found[0]._id);
+     else if(typeof openEditor==='function')openEditor('活動管理',found[0]._id);
+    },'sx-calendar-linked'));
+   }
+  }
+ }
+ window.sanxunCalendar=function(){
+  const result=originalCalendar.apply(this,arguments);
+  try{enrichCalendar()}catch(err){console.error('行事曆明細補強失敗',err)}
+  return result;
+ };
+ // Handle the page already being open when the script finishes loading.
+ if(document.querySelector('#content .calendar-details'))enrichCalendar();
+ window.sxCalendarDetailVersion='2026-11-06-v6';
+})();
+</script>
+<style id="sx-activity-type-split-style">
+#sx-type-guidance{margin:0 0 15px;background:#f2faf8;border:1px solid #c9e7df;border-radius:10px;padding:11px 14px;color:#26545a;font-size:13px;line-height:1.6}
+.sx-profile-quick{background:#f7fffc!important;border-color:#a8d7ce!important;color:#176b65!important}
+</style>
+<script id="sx-activity-type-split-v7">
+/* 將共用活動資料表中的「問事預約」與正式宮廟活動分流呈現；不刪除、不搬移既有資料。 */
+(function(){
+ 'use strict';
+ const originalShowActivity=showActivity;
+ function allActivities(){return Array.isArray(db?.['活動管理'])?db['活動管理']:[]}
+ const isBooking=r=>r?._calendarType==='consultation';
+ const safe=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const key=v=>String(v??'');
+ function bookingEditor(id){
+   if(typeof window.sanxunOpenBooking==='function')return window.sanxunOpenBooking(id);
+   alert('問事預約編輯功能尚未載入，請重新整理頁面');
+ }
+ // 避免點選問事名稱又跳進不適用的「活動線上報名／參加名冊／待審核」畫面。
+ showActivity=function(id,q=''){
+   const a=allActivities().find(x=>key(x._id)===key(id));
+   if(isBooking(a))return bookingEditor(a._id);
+   return originalShowActivity(id,q);
+ };
+ function filteredActivities(){
+   const q=key(document.getElementById('filter')?.value).toLowerCase();
+   const fields=fieldMap?.['活動管理']||[];
+   return allActivities().filter(r=>fields.some(k=>key(r[k]).toLowerCase().includes(q)));
+ }
+ function fixRows(){
+   if(current!=='活動管理')return;
+   const rows=[...document.querySelectorAll('#rows tr')];
+   const matching=filteredActivities();
+   rows.forEach((tr,index)=>{
+     const r=matching[index];if(!r)return;
+     const first=tr.querySelector('td'),ops=tr.lastElementChild;
+     if(!first||!ops)return;
+     // 清掉舊版在同一列反覆疊加的「參加名單／名單」重複操作。
+     ops.querySelectorAll('button').forEach(b=>{
+       const t=b.textContent.trim();
+       if(t==='參加名單'||t==='名單')b.remove();
+     });
+     if(isBooking(r)){
+       const name=r._booking?.name||key(r['活動名稱']).replace(/^問事預約[｜|\s]*/, '')||'未命名預約';
+       first.innerHTML='<button class="link" type="button">🟡 問事預約｜'+safe(name)+'</button><div class="mini">查看／修改預約・連結信眾，不使用活動報名名冊</div>';
+       first.querySelector('button').onclick=()=>bookingEditor(r._id);
+       ops.querySelectorAll('button').forEach(b=>{
+         const t=b.textContent.trim();
+         if(t==='參加報名'||t==='報名'||t==='編輯')b.remove();
+       });
+       if(!ops.querySelector('[data-sx-edit-booking]')){
+         const b=document.createElement('button');b.type='button';b.className='secondary tiny';
+         b.dataset.sxEditBooking='1';b.textContent='查看／修改預約';b.onclick=()=>bookingEditor(r._id);
+         ops.prepend(b);
+       }
+       if(r._booking?.personId && !ops.querySelector('[data-sx-person]')){
+         const p=(db?.['信眾管理']||[]).find(x=>key(x._id)===key(r._booking.personId));
+         if(p){const b=document.createElement('button');b.type='button';b.className='secondary tiny sx-profile-quick';b.dataset.sxPerson='1';b.textContent='信眾資料';
+           b.onclick=()=>{if(typeof window.sanxunProfile==='function')window.sanxunProfile(p._id);else if(typeof showPerson==='function')showPerson(p._id)};ops.prepend(b)}
+       }
+     }else{
+       const title=key(r['活動名稱']||'未命名活動');
+       first.innerHTML='<button class="link" type="button">'+safe(title)+'</button><div class="mini">查看活動資訊與報名名冊</div>';
+       first.querySelector('button').onclick=()=>originalShowActivity(r._id);
+       if(!ops.querySelector('[data-sx-roster]')){
+         const b=document.createElement('button');b.type='button';b.className='secondary tiny';b.dataset.sxRoster='1';b.textContent='報名名冊';b.onclick=()=>originalShowActivity(r._id);ops.prepend(b);
+       }
+     }
+   });
+   // 不再於表格下方另外複製一份問事預約清單，以免同一人同一筆出現兩次。
+   document.getElementById('sx-booking-links')?.remove();
+   const host=document.querySelector('#content .datawrap');
+   if(host&&!host.querySelector('#sx-type-guidance')){
+     const p=document.createElement('div');p.id='sx-type-guidance';
+     p.textContent='📅 正式宮廟活動：查看活動報名、參與名冊。　🟡 問事預約：直接查看／修改預約，並可連結信眾個人紀錄。兩種資料共用行事曆，但管理流程分開。';
+     host.prepend(p);
+   }
+ }
+ const previousPage=modulePage;
+ modulePage=function(name){previousPage(name);if(name==='活動管理')fixRows()};
+ const previousRows=renderRows;
+ renderRows=function(name,q=''){previousRows(name,q);if(name==='活動管理')fixRows()};
+ if(current==='活動管理')fixRows();
+ window.sxActivityTypeSplitVersion='2026-11-06-v7';
+})();
+</script>
 </body></html>
