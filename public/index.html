@@ -1513,56 +1513,107 @@ window.sxPersonLinkVersion='2026-11-06-v5';
 <script id="sx-profile-directory-route-fix-20261106">
 (function(){
  'use strict';
- const ROUTE_KEY='sanxun-last-route-v2';
- const allowedModules=()=>typeof modules!=='undefined'?modules.map(x=>x[0]):[];
- const str=v=>String(v??'').trim();
- // Keep the existing backend, profile transaction history and permission checks intact.
- function putRoute(route){try{sessionStorage.setItem(ROUTE_KEY,JSON.stringify(route));history.replaceState(null,'',location.pathname+location.search+'#sx='+encodeURIComponent(route.type==='profile'?'信眾管理':route.name));}catch(e){console.warn('頁面位置儲存失敗',e)}}
- function readRoute(){try{const raw=sessionStorage.getItem(ROUTE_KEY);if(raw){const r=JSON.parse(raw);if(r&&['module','profile'].includes(r.type))return r}}catch(e){}
-   try{const m=location.hash.match(/^#sx=(.*)$/);if(m)return {type:'module',name:decodeURIComponent(m[1])}}catch(e){}
-   return null;
- }
- const baseGo=go;
- go=function(name){const result=baseGo.apply(this,arguments);if(str(current)===str(name)&&allowedModules().includes(name))putRoute({type:'module',name});return result};
- window.go=go;
- const baseProfile=window.sanxunProfile;
- function renderProfileBasics(id){
-   const person=(db?.['信眾管理']||[]).find(p=>str(p._id)===str(id));if(!person)return;
-   const header=document.querySelector('#content .moduleHead');if(!header)return;
-   document.querySelector('#content .sx-person-basics')?.remove();
-   const box=document.createElement('section');box.className='sx-person-basics';
-   const title=document.createElement('h3');title.textContent='信眾基本資料';box.appendChild(title);
-   const grid=document.createElement('div');grid.className='sx-person-basic-grid';
-   const items=[['姓名','姓名'],['電話','電話'],['國曆生日','國曆生日'],['農曆生日','農曆生日'],['出生時辰','出生時辰'],['性別','性別'],['宮廟職位','宮廟職位'],['加入日期','加入日期'],['地址','地址'],['介紹人','介紹人'],['家庭成員','家庭成員'],['備註','備註']];
-   for(const [label,key] of items){const item=document.createElement('div');item.className='sx-person-basic-item';const l=document.createElement('span');l.className='sx-person-basic-label';l.textContent=label;const v=document.createElement('div');v.className='sx-person-basic-value';v.textContent=str(person[key]||(key==='宮廟職位'?person['職位']:''))||'尚未填寫';item.append(l,v);grid.appendChild(item)}
-   box.appendChild(grid);
-   const actions=document.createElement('div');actions.className='sx-basic-actions';
-   const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='編輯基本資料';edit.onclick=()=>openEditor('信眾管理',person._id);actions.appendChild(edit);box.appendChild(actions);
-   const intro=document.querySelector('#content .sx-referrer-panel');if(intro)intro.before(box);else header.after(box);
- }
- if(typeof baseProfile==='function')window.sanxunProfile=function(id,tab){
-   const result=baseProfile.apply(this,arguments);
-   if((db?.['信眾管理']||[]).some(p=>str(p._id)===str(id))){renderProfileBasics(id);putRoute({type:'profile',id:str(id),tab:tab||'全部歷史'})}
+ const ROUTE_KEY='sanxun-last-route-v3', OLD_KEY='sanxun-last-route-v2';
+ const text=v=>String(v??'').trim();
+ const allowed=()=>typeof modules!=='undefined'?modules.map(x=>x[0]):[];
+ const pathname=()=>location.pathname+location.search;
+ function parse(v){try{const x=JSON.parse(v);return x&&['module','profile'].includes(x.type)?x:null}catch{return null}}
+ function routeFromHash(){try{const hash=location.hash;
+    if(hash.startsWith('#sxprofile=')){const id=decodeURIComponent(hash.slice(11));return id?{type:'profile',id,tab:'全部歷史'}:null}
+    if(hash.startsWith('#sx=')){const name=decodeURIComponent(hash.slice(4));return name?{type:'module',name}:null}
+  }catch(e){}return null}
+ function stored(){try{return routeFromHash()||parse(sessionStorage.getItem(ROUTE_KEY))||parse(localStorage.getItem(ROUTE_KEY))||parse(sessionStorage.getItem(OLD_KEY))}catch{return routeFromHash()}}
+ // Capture the last intentional navigation before initialization can reset the view to the homepage.
+ const requested=stored();let booting=!!requested;let restored=false;let tries=0;
+ function save(route){if(!route)return;try{
+   const value=JSON.stringify(route);sessionStorage.setItem(ROUTE_KEY,value);localStorage.setItem(ROUTE_KEY,value);
+   const hash=route.type==='profile'?'#sxprofile='+encodeURIComponent(route.id):'#sx='+encodeURIComponent(route.name);
+   if(location.hash!==hash)history.replaceState(history.state,'',pathname()+hash);
+ }catch(e){console.warn('無法儲存目前頁面',e)}}
+ const previousGo=go;
+ go=function(name){
+   const before=current;
+   const result=previousGo.apply(this,arguments);
+   if(text(current)===text(name)&&allowed().includes(name)){
+     // Ignore startup's automatic go('首頁總覽') until prior position is restored.
+     if(!(booting&&name==='首頁總覽'))save({type:'module',name});
+   }
    return result;
  };
- // The old inline button uses the lexical global identifier sanxunProfile, which references window.
- function restore(){const r=readRoute();if(!r)return;
-   if(r.type==='profile'){
-     if((db?.['信眾管理']||[]).some(p=>str(p._id)===str(r.id))&&typeof window.sanxunProfile==='function')window.sanxunProfile(r.id,r.tab||'全部歷史');
-     else go('信眾管理');
-   }else if(allowedModules().includes(r.name))go(r.name);
+ window.go=go;
+ const previousProfile=window.sanxunProfile;
+ function basics(id){
+   const person=(db?.['信眾管理']||[]).find(p=>text(p._id)===text(id));if(!person)return;
+   const header=document.querySelector('#content .moduleHead');if(!header)return;
+   document.querySelector('#content .sx-person-basics')?.remove();
+   const section=document.createElement('section');section.className='sx-person-basics';
+   const h=document.createElement('h3');h.textContent='信眾基本資料';section.appendChild(h);
+   const grid=document.createElement('div');grid.className='sx-person-basic-grid';
+   const items=[['姓名','姓名'],['電話','電話'],['國曆生日','國曆生日'],['農曆生日','農曆生日'],['出生時辰','出生時辰'],['性別','性別'],['宮廟職位','宮廟職位'],['加入日期','加入日期'],['地址','地址'],['介紹人','介紹人'],['家庭成員','家庭成員'],['備註','備註']];
+   for(const [label,key] of items){const d=document.createElement('div');d.className='sx-person-basic-item';const l=document.createElement('span');l.className='sx-person-basic-label';l.textContent=label;const val=document.createElement('div');val.className='sx-person-basic-value';val.textContent=text(person[key]||(key==='宮廟職位'?person['職位']:''))||'尚未填寫';d.append(l,val);grid.appendChild(d)}
+   section.appendChild(grid);
+   const actions=document.createElement('div');actions.className='sx-basic-actions';
+   const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='編輯基本資料';edit.onclick=()=>openEditor('信眾管理',person._id);actions.appendChild(edit);section.appendChild(actions);
+   const intro=document.querySelector('#content .sx-referrer-panel');if(intro)intro.before(section);else header.after(section);
  }
- // Restore after scripts, and retry after auth/data hydration when necessary.
- let restored=false;
- function attempt(){if(restored)return;const route=readRoute();if(!route)return;
-   if(route.type==='profile'&&!(db?.['信眾管理']||[]).some(p=>str(p._id)===str(route.id)))return;
-   restored=true;try{restore()}catch(e){restored=false;console.warn('頁面恢復失敗',e)}
+ if(typeof previousProfile==='function')window.sanxunProfile=function(id,tab){
+   const res=previousProfile.apply(this,arguments);
+   if((db?.['信眾管理']||[]).some(p=>text(p._id)===text(id))){basics(id);save({type:'profile',id:text(id),tab:tab||'全部歷史'})}
+   return res;
+ };
+ // Remember explicitly clicked menu entries even if later cloud/auth scripts rerender the page.
+ document.addEventListener('click',event=>{
+   const b=event.target.closest?.('#nav .navitem');if(!b)return;
+   const name=text(b.textContent).replace(/^[^\p{L}\p{N}]+/u,'').trim();
+   const match=allowed().find(n=>name===n||name.endsWith(n));
+   if(match){booting=false;save({type:'module',name:match})}
+ },true);
+ function attempt(){
+   if(restored||!requested)return;
+   const main=document.getElementById('content');if(!main)return;
+   try{
+     if(requested.type==='profile'){
+       if(!(db?.['信眾管理']||[]).some(p=>text(p._id)===text(requested.id)))return;
+       if(typeof window.sanxunProfile!=='function')return;
+       window.sanxunProfile(requested.id,requested.tab||'全部歷史');
+       restored=!!document.querySelector('#content .sx-person-basics');
+     }else if(allowed().includes(requested.name)){
+       go(requested.name);restored=text(current)===text(requested.name);
+     }else{restored=true}
+     if(restored){booting=false;return}
+   }catch(e){console.warn('原頁面恢復尚未完成',e)}
  }
+ // Auth and cloud hydration may happen after DOMContentLoaded; retry instead of accepting homepage.
+ const interval=setInterval(()=>{
+   if(!requested){booting=false;clearInterval(interval);return}
+   attempt();if(restored||++tries>=45){booting=false;clearInterval(interval)}
+ },250);
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',attempt,{once:true});else queueMicrotask(attempt);
- window.addEventListener('load',attempt);
- // For asynchronous cloud data arriving shortly after load, without forcing a jump when the person is absent.
- let tries=0;const restoreInterval=setInterval(()=>{attempt();if(restored||++tries>=12)clearInterval(restoreInterval)},350);
- window.sxRestoreNavigationVersion='2026-11-06-v8';
+ window.addEventListener('pageshow',attempt);
+ window.addEventListener('pagehide',()=>{
+   if(booting&&requested)return;
+   const route=stored();if(route)save(route);
+ });
+ window.sxRestoreNavigationVersion='2026-11-06-v9';
 })();
 </script>
+<style id="sx-people-directory-polished-20261106">
+/* Aligned five-column directory, no old width cap. */
+@media(min-width:901px){
+  #sx-people-directory{max-width:1120px!important;width:100%!important;margin:0 auto!important}
+  #sx-people-directory .sx-person-row{
+    box-sizing:border-box!important;display:grid!important;
+    grid-template-columns:minmax(125px,1.35fr) minmax(120px,1.15fr) minmax(90px,.7fr) minmax(105px,1.1fr) minmax(220px,auto)!important;
+    column-gap:18px!important;padding:10px 14px!important;align-items:center!important;
+  }
+  #sx-people-directory .sx-person-header{padding-top:13px!important;padding-bottom:13px!important}
+  #sx-people-directory .sx-person-actions{display:flex!important;justify-content:flex-end!important;flex-wrap:nowrap!important;gap:6px!important}
+  #sx-people-directory .sx-person-actions button{margin:0!important;padding:8px 10px!important;white-space:nowrap!important}
+  #sx-people-directory .sx-page-controls{max-width:100%!important;justify-content:flex-end!important}
+  #sx-people-directory .sx-page-info{margin-right:auto!important}
+}
+@media(min-width:901px) and (max-width:1150px){
+  #sx-people-directory .sx-person-row{grid-template-columns:minmax(88px,1.2fr) minmax(95px,1fr) minmax(70px,.7fr) minmax(80px,.8fr) minmax(205px,auto)!important;column-gap:10px!important;padding-left:10px!important;padding-right:10px!important}
+}
+</style>
 </body></html>
